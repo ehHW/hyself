@@ -50,9 +50,11 @@
         </aside>
 
         <section class="game-stage">
-            <div v-if="isPreviewingBoard" class="preview-banner">
-                正在查看 {{ resolveDisplayName(previewRecord as GameRecordItem) }} 的终局棋盘
-                <a class="preview-cancel" @click.prevent="clearPreview">退出查看</a>
+            <div class="preview-slot">
+                <div v-if="isPreviewingBoard" class="preview-banner">
+                    正在查看 {{ resolveDisplayName(previewRecord as GameRecordItem) }} 的终局棋盘
+                    <a class="preview-cancel" @click.prevent="clearPreview">退出查看</a>
+                </div>
             </div>
             <Game2048
                 :preview-board-snapshot="previewBoardSnapshot"
@@ -367,8 +369,19 @@ onMounted(() => {
     justify-content: center;
 }
 
+.preview-slot {
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
 .preview-banner {
-    align-self: center;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
     padding: 8px 12px;
     border-radius: 999px;
     background: color-mix(in srgb, #fa8c16 15%, var(--surface-header));
