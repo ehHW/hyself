@@ -47,9 +47,9 @@ pnpm dev
 
 默认通过 Vite 代理转发到本地后端：
 
-- /api -> http://127.0.0.1:8000/
+- /api -> <http://127.0.0.1:8000/>
 - /ws/ -> ws://127.0.0.1:8000/ws/
-- /uploads -> http://127.0.0.1:8000/uploads
+- /uploads -> <http://127.0.0.1:8000/uploads>
 
 ## 常用命令
 
