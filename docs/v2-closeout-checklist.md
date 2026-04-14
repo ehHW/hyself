@@ -28,7 +28,7 @@
 
 - [ ] 更新 [docs/V2/chat_v2_refactor_plan.md](../hyself_server/docs/V2/chat_v2_refactor_plan.md) 中已过时的“仍待完成”描述，和当前代码现状对齐
 - [ ] 更新 [docs/V2/v2_architecture.md](../hyself_server/docs/V2/v2_architecture.md) 中“目标结构”与“当前落地快照”，补充已完成的前后端分层与场景拆分
-- [ ] 整理一份 V2 发布说明，概括聊天、资源中心、RBAC、娱乐中心、错误页和浏览器回归范围
+- [x] 整理一份 V2 发布说明，概括聊天、资源中心、RBAC、娱乐中心、错误页和浏览器回归范围
 
 ### 工程收口
 
