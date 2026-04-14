@@ -104,7 +104,7 @@ export const readConversationApi = (conversationId: number, last_read_sequence: 
 }
 
 export const openDirectConversationApi = (target_user_id: number) => {
-    return instance.post<{ detail: string; created: boolean; conversation: { id: number; type: 'direct' | 'group'; show_in_list: boolean } }>(
+    return instance.post<{ detail: string; created: boolean; conversation: ChatConversationItem }>(
         'chat/conversations/direct/open/',
         { target_user_id },
     )
@@ -116,7 +116,7 @@ export const createGroupConversationApi = (payload: {
     join_approval_required: boolean
     allow_member_invite: boolean
 }) => {
-    return instance.post<{ detail: string; conversation: { id: number; type: 'group'; name: string } }>('chat/conversations/groups/', payload)
+    return instance.post<{ detail: string; conversation: ChatConversationItem }>('chat/conversations/groups/', payload)
 }
 
 export const getConversationMembersApi = (conversationId: number) => {
@@ -130,7 +130,7 @@ export const inviteConversationMemberApi = (conversationId: number, target_user_
     )
 }
 
-export const applyGroupInvitationApi = (payload: { conversation_id: number; inviter_user_id: number }) => {
+export const applyGroupInvitationApi = (payload: { conversation_id: number; inviter_user_id?: number }) => {
     return instance.post<{
         detail: string
         mode: 'pending_approval' | 'joined'
@@ -155,6 +155,17 @@ export const muteConversationMemberApi = (conversationId: number, userId: number
 
 export const leaveConversationApi = (conversationId: number) => {
     return instance.post<{ detail: string }>(`chat/conversations/${conversationId}/leave/`)
+}
+
+export const transferGroupOwnerApi = (conversationId: number, target_user_id: number) => {
+    return instance.post<{ detail: string; conversation_id: number; target_user_id: number }>(
+        `chat/conversations/${conversationId}/transfer-owner/`,
+        { target_user_id },
+    )
+}
+
+export const disbandGroupConversationApi = (conversationId: number) => {
+    return instance.post<{ detail: string; conversation_id: number }>(`chat/conversations/${conversationId}/disband/`)
 }
 
 export const getGroupJoinRequestsApi = (params?: { conversation_id?: number; status?: string }) => {
@@ -189,7 +200,7 @@ export const updateFriendSettingApi = (friendUserId: number, payload: { remark?:
     return instance.patch<{ detail: string; remark: string }>(`chat/friends/${friendUserId}/settings/`, payload)
 }
 
-export const searchChatApi = (params: { keyword: string; limit?: number }) => {
+export const searchChatApi = (params: { keyword: string; limit?: number; scope?: 'connected' | 'discover' | 'audit' }) => {
     return instance.get<ChatSearchResult>('chat/search/', { params })
 }
 

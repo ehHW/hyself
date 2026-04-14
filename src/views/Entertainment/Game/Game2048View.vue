@@ -11,14 +11,28 @@
                         </a-tooltip>
                     </div>
                 </div>
-                <a-button size="small" :loading="isLeaderboardLoading || isBestLoading" @click="refreshRecords(false)">刷新</a-button>
             </div>
+
+            <a-alert
+                v-if="!canSubmitBestRecord"
+                type="info"
+                show-icon
+                class="leaderboard-alert"
+                message="当前为排行榜只读模式"
+                description="你可以查看排行榜和历史成绩，但当前角色没有 game.submit_best_record 权限，新的游戏成绩不会提交到后端。"
+            />
 
             <section class="summary-card">
                 <div class="summary-label">我的最高分</div>
-                <div class="summary-score">{{ myBestRecord?.best_score ?? 0 }}</div>
+                <div class="summary-score">
+                    {{ myBestRecord?.best_score ?? 0 }}
+                </div>
                 <div class="summary-meta">
-                    <span>{{ myBestRecord ? formatTime(myBestRecord.finished_at) : '还没有通关记录' }}</span>
+                    <span>{{
+                        myBestRecord
+                            ? formatTime(myBestRecord.finished_at)
+                            : "还没有通关记录"
+                    }}</span>
                     <span v-if="myBestRecord">结束棋盘已入库</span>
                 </div>
             </section>
@@ -29,17 +43,29 @@
                         v-for="item in leaderboard"
                         :key="`${item.user_id}-${item.game_code}`"
                         class="leaderboard-item"
-                        :class="{ 'is-self': item.user_id === currentUserId, 'is-preview': isPreviewRecord(item) }"
+                        :class="{
+                            'is-self': item.user_id === currentUserId,
+                            'is-preview': isPreviewRecord(item),
+                        }"
                         @click="toggleBoardPreview(item)"
                     >
                         <div class="rank-badge">#{{ item.rank }}</div>
                         <div class="player-main-row">
-                            <a-avatar :src="item.avatar || undefined" class="player-avatar">
+                            <a-avatar
+                                :src="item.avatar || undefined"
+                                class="player-avatar"
+                            >
                                 {{ resolveDisplayName(item).slice(0, 1) }}
                             </a-avatar>
                             <div class="player-name-row">
-                                <span class="player-name">{{ resolveDisplayName(item) }}</span>
-                                <span v-if="item.user_id === currentUserId" class="self-tag">我</span>
+                                <span class="player-name">{{
+                                    resolveDisplayName(item)
+                                }}</span>
+                                <span
+                                    v-if="item.user_id === currentUserId"
+                                    class="self-tag"
+                                    >我</span
+                                >
                             </div>
                         </div>
                         <div class="player-score">{{ item.best_score }}</div>
@@ -52,8 +78,12 @@
         <section class="game-stage">
             <div class="preview-slot">
                 <div v-if="isPreviewingBoard" class="preview-banner">
-                    正在查看 {{ resolveDisplayName(previewRecord as GameRecordItem) }} 的终局棋盘
-                    <a class="preview-cancel" @click.prevent="clearPreview">退出查看</a>
+                    正在查看
+                    {{ resolveDisplayName(previewRecord as GameRecordItem) }}
+                    的终局棋盘
+                    <a class="preview-cancel" @click.prevent="clearPreview"
+                        >退出查看</a
+                    >
                 </div>
             </div>
             <Game2048
@@ -67,117 +97,145 @@
 </template>
 
 <script setup lang="ts">
-import { InfoCircleOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
-import { computed, onMounted, ref } from 'vue'
-import { getGameLeaderboardApi, getMyBestGameRecordApi, submitBestGameRecordApi } from '@/api/game'
-import { ENTERTAINMENT_GAMES } from '@/views/Entertainment/gameConfig'
-import { useUserStore } from '@/stores/user'
-import type { GameRecordItem } from '@/types/game'
-import Game2048 from './Game2048.vue'
+import { InfoCircleOutlined } from "@ant-design/icons-vue";
+import { message } from "ant-design-vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import {
+    getGameLeaderboardApi,
+    getMyBestGameRecordApi,
+    submitBestGameRecordApi,
+} from "@/api/game";
+import { ENTERTAINMENT_GAMES } from "@/views/Entertainment/gameConfig";
+import { useUserStore } from "@/stores/user";
+import type { GameRecordItem } from "@/types/game";
+import { subscribeAppRefresh } from "@/utils/appRefresh";
+import Game2048 from "./Game2048.vue";
 
-const currentGame = ENTERTAINMENT_GAMES.game2048
+const currentGame = ENTERTAINMENT_GAMES.game2048;
 
-const leaderboard = ref<GameRecordItem[]>([])
-const myBestRecord = ref<GameRecordItem | null>(null)
-const previewRecord = ref<GameRecordItem | null>(null)
-const isLeaderboardLoading = ref(false)
-const isBestLoading = ref(false)
-const isSubmittingResult = ref(false)
-const userStore = useUserStore()
-const currentUserId = computed(() => userStore.user?.id ?? 0)
-const isPreviewingBoard = computed(() => Boolean(previewRecord.value))
-const previewBoardSnapshot = computed<number[][] | null>(() => previewRecord.value?.board_snapshot ?? null)
-const previewScore = computed<number | null>(() => previewRecord.value?.best_score ?? null)
+const leaderboard = ref<GameRecordItem[]>([]);
+const myBestRecord = ref<GameRecordItem | null>(null);
+const previewRecord = ref<GameRecordItem | null>(null);
+const isLeaderboardLoading = ref(false);
+const isBestLoading = ref(false);
+const isSubmittingResult = ref(false);
+const userStore = useUserStore();
+const currentUserId = computed(() => userStore.user?.id ?? 0);
+const canSubmitBestRecord = computed(() =>
+    userStore.hasPermission("game.submit_best_record"),
+);
+const isPreviewingBoard = computed(() => Boolean(previewRecord.value));
+const previewBoardSnapshot = computed<number[][] | null>(
+    () => previewRecord.value?.board_snapshot ?? null,
+);
+const previewScore = computed<number | null>(
+    () => previewRecord.value?.best_score ?? null,
+);
+let unsubscribeAppRefresh: (() => void) | null = null;
 
 function isPreviewRecord(record: GameRecordItem) {
-    return previewRecord.value?.id === record.id
+    return previewRecord.value?.id === record.id;
 }
 
 function hasBoardSnapshot(record: GameRecordItem) {
-    return Array.isArray(record.board_snapshot) && record.board_snapshot.length > 0
+    return (
+        Array.isArray(record.board_snapshot) && record.board_snapshot.length > 0
+    );
 }
 
 function clearPreview() {
-    previewRecord.value = null
+    previewRecord.value = null;
 }
 
 function toggleBoardPreview(record: GameRecordItem) {
     if (isPreviewRecord(record)) {
-        clearPreview()
-        return
+        clearPreview();
+        return;
     }
     if (!hasBoardSnapshot(record)) {
-        message.warning('该记录没有可预览的终局棋盘')
-        return
+        message.warning("该记录没有可预览的终局棋盘");
+        return;
     }
-    previewRecord.value = record
+    previewRecord.value = record;
 }
 
 function resolveDisplayName(record: GameRecordItem) {
-    return record.display_name || record.username || `用户#${record.user_id}`
+    return record.display_name || record.username || `用户#${record.user_id}`;
 }
 
 function formatTime(value: string) {
     if (!value) {
-        return '暂无记录'
+        return "暂无记录";
     }
-    return new Date(value).toLocaleString('zh-CN', { hour12: false })
+    return new Date(value).toLocaleString("zh-CN", { hour12: false });
 }
 
 async function loadLeaderboard(silent: boolean = false) {
-    isLeaderboardLoading.value = true
+    isLeaderboardLoading.value = true;
     try {
         const { data } = await getGameLeaderboardApi({
             game_code: currentGame.code,
             limit: 10,
-        })
-        leaderboard.value = data.results
+        });
+        leaderboard.value = data.results;
         if (previewRecord.value) {
-            const matched = data.results.find((item) => item.id === previewRecord.value?.id)
+            const matched = data.results.find(
+                (item) => item.id === previewRecord.value?.id,
+            );
             if (matched) {
-                previewRecord.value = matched
+                previewRecord.value = matched;
             }
         }
     } catch {
         if (!silent) {
-            message.error('获取排行榜失败')
+            message.error("获取排行榜失败");
         }
     } finally {
-        isLeaderboardLoading.value = false
+        isLeaderboardLoading.value = false;
     }
 }
 
 async function loadMyBestRecord(silent: boolean = false) {
-    isBestLoading.value = true
+    isBestLoading.value = true;
     try {
-        const { data } = await getMyBestGameRecordApi({ game_code: currentGame.code })
-        myBestRecord.value = data.record
+        const { data } = await getMyBestGameRecordApi({
+            game_code: currentGame.code,
+        });
+        myBestRecord.value = data.record;
     } catch {
         if (!silent) {
-            message.error('获取个人最高分失败')
+            message.error("获取个人最高分失败");
         }
     } finally {
-        isBestLoading.value = false
+        isBestLoading.value = false;
     }
 }
 
 async function refreshRecords(silent: boolean = false) {
-    await Promise.all([loadLeaderboard(silent), loadMyBestRecord(silent)])
+    await Promise.all([loadLeaderboard(silent), loadMyBestRecord(silent)]);
 }
 
-async function handleGameOver(payload: { score: number; boardSnapshot: number[][] }) {
+async function handleGameOver(payload: {
+    score: number;
+    boardSnapshot: number[][];
+}) {
+    if (!canSubmitBestRecord.value) {
+        message.info("当前角色无成绩提交权限，已跳过同步");
+        return;
+    }
     if (isSubmittingResult.value) {
-        return
+        return;
     }
 
-    isSubmittingResult.value = true
+    isSubmittingResult.value = true;
     try {
-        const { data: bestData } = await getMyBestGameRecordApi({ game_code: currentGame.code })
-        myBestRecord.value = bestData.record
-        const previousBestScore = bestData.record?.best_score ?? 0
+        const { data: bestData } = await getMyBestGameRecordApi({
+            game_code: currentGame.code,
+        });
+        myBestRecord.value = bestData.record;
+        const previousBestScore = bestData.record?.best_score ?? 0;
         if (payload.score <= previousBestScore) {
-            return
+            return;
         }
 
         const { data } = await submitBestGameRecordApi({
@@ -185,21 +243,29 @@ async function handleGameOver(payload: { score: number; boardSnapshot: number[][
             game_name: currentGame.name,
             score: payload.score,
             board_snapshot: payload.boardSnapshot,
-        })
+        });
 
-        myBestRecord.value = data.record
-        await loadLeaderboard(true)
-        message.success(`已更新最高分：${data.record.best_score}`)
+        myBestRecord.value = data.record;
+        await loadLeaderboard(true);
+        message.success(`已更新最高分：${data.record.best_score}`);
     } catch {
-        message.error('同步最高分失败')
+        message.error("同步最高分失败");
     } finally {
-        isSubmittingResult.value = false
+        isSubmittingResult.value = false;
     }
 }
 
 onMounted(() => {
-    void refreshRecords(true)
-})
+    unsubscribeAppRefresh = subscribeAppRefresh(async () => {
+        await refreshRecords(false);
+    });
+    void refreshRecords(true);
+});
+
+onBeforeUnmount(() => {
+    unsubscribeAppRefresh?.();
+    unsubscribeAppRefresh = null;
+});
 </script>
 
 <style scoped>
@@ -219,8 +285,11 @@ onMounted(() => {
     gap: 16px;
     padding: 18px;
     border-radius: 18px;
-    background:
-        linear-gradient(180deg, color-mix(in srgb, var(--surface-header) 92%, #f4ede1 8%), var(--surface-sidebar));
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--surface-header) 92%, #f4ede1 8%),
+        var(--surface-sidebar)
+    );
     box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
 }
 
@@ -263,6 +332,10 @@ onMounted(() => {
     background: color-mix(in srgb, var(--surface-header) 84%, #f6c177 16%);
 }
 
+.leaderboard-alert {
+    margin-bottom: -2px;
+}
+
 .summary-label {
     font-size: 12px;
     color: var(--text-secondary);
@@ -301,7 +374,9 @@ onMounted(() => {
     background: color-mix(in srgb, var(--surface-header) 92%, transparent);
     border: 1px solid color-mix(in srgb, var(--text-secondary) 14%, transparent);
     cursor: pointer;
-    transition: border-color 0.2s ease, background-color 0.2s ease;
+    transition:
+        border-color 0.2s ease,
+        background-color 0.2s ease;
 }
 
 .leaderboard-item.is-self {

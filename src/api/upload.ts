@@ -43,6 +43,8 @@ export interface FileEntryItem {
     stored_name: string
     resource_kind?: 'resource_center' | 'chat_attachment' | 'chat_upload'
     owner_user_id?: number | null
+    virtual_path?: string | null
+    virtual_kind?: 'video_artifacts_root' | 'video_artifact_directory' | 'video_artifact_file' | null
     is_dir: boolean
     is_virtual?: boolean
     parent_id: number | null
@@ -54,6 +56,7 @@ export interface FileEntryItem {
     updated_at: string
     is_system: boolean
     is_recycle_bin: boolean
+    in_recycle_bin_tree?: boolean
     recycled_at: string | null
     expires_at: string | null
     remaining_days: number | null
@@ -66,7 +69,7 @@ export interface FileEntryItem {
 
 export interface FileEntriesResponse {
     parent: FileEntryItem | null
-    breadcrumbs: Array<{ id: number | null; name: string; owner_user_id?: number | null }>
+    breadcrumbs: Array<{ id: number | null; name: string; owner_user_id?: number | null; virtual_path?: string | null }>
     items: FileEntryItem[]
     owner_user?: { id: number; name: string } | null
 }
@@ -108,11 +111,12 @@ const buildScopePayload = <T extends Record<string, unknown>>(payload: T, scope:
         : payload
 )
 
-export const getFileEntriesApi = (parentId?: number | null, scope: FileManageScope = 'user', ownerUserId?: number | null) => {
+export const getFileEntriesApi = (parentId?: number | null, scope: FileManageScope = 'user', ownerUserId?: number | null, virtualPath?: string | null) => {
     return instance.get<FileEntriesResponse>('upload/files/', {
         params: {
             parent_id: parentId ?? undefined,
             ...buildScopeParams(scope, ownerUserId),
+            virtual_path: scope === 'system' ? (virtualPath ?? undefined) : undefined,
         },
     })
 }
@@ -172,9 +176,9 @@ export const uploadChunkApi = (formData: FormData) => {
     })
 }
 
-export const getUploadedChunksApi = (fileMd5: string) => {
+export const getUploadedChunksApi = (fileMd5: string, category?: string) => {
     return instance.get<{ uploaded_chunks: number[] }>('upload/chunks/', {
-        params: { file_md5: fileMd5 },
+        params: { file_md5: fileMd5, category },
     })
 }
 

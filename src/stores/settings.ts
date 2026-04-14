@@ -25,7 +25,7 @@ const defaultChatLayout: ChatLayoutSettings = {
 }
 
 const defaultSettings: AppSettings = {
-    systemTitle: 'Bbot 管理后台',
+    systemTitle: 'Hyself 管理后台',
     themeMode: 'light',
     chatReceiveNotification: true,
     chatListSortMode: 'recent',

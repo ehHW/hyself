@@ -1,10 +1,11 @@
 import type { Ref } from 'vue'
 import { getGroupJoinRequestsApi } from '@/api/chat'
 import { loadJoinRequestsAction, loadMembersAction } from '@/stores/chat/groupActions'
-import { handleJoinRequestScene, inviteMemberScene, leaveConversationScene, muteMemberScene, removeMemberScene, updateMemberRoleScene } from '@/stores/chat/groupScenes'
+import { disbandGroupConversationScene, handleJoinRequestScene, inviteMemberScene, leaveConversationScene, muteMemberScene, removeMemberScene, transferGroupOwnerScene, updateMemberRoleScene } from '@/stores/chat/groupScenes'
 import type { ChatConversationItem, ChatConversationMemberItem, ChatGroupJoinRequestItem } from '@/types/chat'
 
 export function createGroupOrchestration(deps: {
+    canLoadGlobalGroupJoinRequests: () => boolean
     globalGroupJoinRequests: Ref<ChatGroupJoinRequestItem[]>
     conversations: Ref<ChatConversationItem[]>
     memberMap: Record<number, ChatConversationMemberItem[]>
@@ -13,6 +14,10 @@ export function createGroupOrchestration(deps: {
     loadContactGroupConversations: () => Promise<void>
 }) {
     const loadGlobalGroupJoinRequests = async () => {
+        if (!deps.canLoadGlobalGroupJoinRequests()) {
+            deps.globalGroupJoinRequests.value = []
+            return
+        }
         const { data } = await getGroupJoinRequestsApi({ status: 'pending' })
         deps.globalGroupJoinRequests.value = data.results
     }
@@ -52,6 +57,24 @@ export function createGroupOrchestration(deps: {
         await leaveConversationScene({ conversationId, loadConversations: deps.loadConversations, loadContactGroupConversations: deps.loadContactGroupConversations })
     }
 
+    const transferOwner = async (conversationId: number, targetUserId: number) => {
+        await transferGroupOwnerScene({
+            conversationId,
+            targetUserId,
+            loadMembers,
+            loadConversations: deps.loadConversations,
+            loadContactGroupConversations: deps.loadContactGroupConversations,
+        })
+    }
+
+    const disbandConversation = async (conversationId: number) => {
+        await disbandGroupConversationScene({
+            conversationId,
+            loadConversations: deps.loadConversations,
+            loadContactGroupConversations: deps.loadContactGroupConversations,
+        })
+    }
+
     const handleJoinRequest = async (requestId: number, action: 'approve' | 'reject' | 'cancel', conversationId: number) => {
         await handleJoinRequestScene({ requestId, action, conversationId, loadJoinRequests, loadMembers, loadConversations: deps.loadConversations })
     }
@@ -65,6 +88,8 @@ export function createGroupOrchestration(deps: {
         updateMemberRole,
         muteMember,
         leaveConversation,
+        transferOwner,
+        disbandConversation,
         handleJoinRequest,
     }
 }

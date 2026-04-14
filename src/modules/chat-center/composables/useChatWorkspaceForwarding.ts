@@ -217,8 +217,10 @@ export function useChatWorkspaceForwarding(options: {
             return
         }
         selectedForwardTargetKey.value = target.key
-        if (forwardingMessageIds.value.length > 1 && selectedForwardMode.value) {
-            await submitForward(target, selectedForwardMode.value)
+        if (forwardingMessageIds.value.length > 1) {
+            pendingForwardTarget.value = target
+            forwardModalOpen.value = false
+            forwardModeModalOpen.value = true
             return
         }
         const confirmed = await confirmForwardSelection(target)
@@ -234,7 +236,12 @@ export function useChatWorkspaceForwarding(options: {
         }
         selectedForwardMode.value = forwardMode
         forwardModeModalOpen.value = false
-        void openForwardModal()
+        const target = pendingForwardTarget.value
+        if (!target) {
+            void openForwardModal()
+            return
+        }
+        void submitForward(target, forwardMode)
     }
 
     const beginForwardSelection = (messageIds: number[]) => {
@@ -242,10 +249,6 @@ export function useChatWorkspaceForwarding(options: {
         selectedForwardTargetKey.value = ''
         pendingForwardTarget.value = null
         selectedForwardMode.value = null
-        if (messageIds.length > 1) {
-            forwardModeModalOpen.value = true
-            return
-        }
         void openForwardModal()
     }
 

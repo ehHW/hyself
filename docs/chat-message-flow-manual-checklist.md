@@ -4,18 +4,12 @@
 
 ## 启动前提
 
-建议直接使用工作区任务：
-
-1. `backend: uvicorn`
-2. `backend: celery`
-3. `frontend: vite`
-
-如果不走任务，使用下面三条稳定命令：
+建议直接在工作区根目录使用下面三条稳定命令：
 
 ```powershell
-d:/work/SolBot/bbot_server/.venv/Scripts/python.exe -m uvicorn --app-dir d:/work/SolBot/bbot_server bbot_server.asgi:application --host 127.0.0.1 --port 8000 --reload --lifespan off
-d:/work/SolBot/bbot_server/.venv/Scripts/python.exe -m celery --workdir d:/work/SolBot/bbot_server -A bbot_server.celery:app worker -l info --pool=solo -c 1
-pnpm --dir d:/work/SolBot/bbot dev --host 127.0.0.1 --port 5173
+hyself_server/.venv/Scripts/python.exe -m uvicorn --app-dir ./hyself_server hyself_server.asgi:application --host 127.0.0.1 --port 8000 --reload --lifespan off
+hyself_server/.venv/Scripts/python.exe -m celery --workdir ./hyself_server -A hyself_server.celery:app worker -l info --pool=solo -c 1
+pnpm --dir ./hyself dev --host 127.0.0.1 --port 5174
 ```
 
 准备数据建议：
@@ -41,25 +35,13 @@ pnpm --dir d:/work/SolBot/bbot dev --host 127.0.0.1 --port 5173
 
 1. 页面级 bootstrap 与路由切换
 2. composer 到消息列表的真实 UI 动线
-3. 转发弹窗、聊天记录查看器、复制/转发交互
+3. 转发弹窗、聊天记录查看器、复制 / 转发交互
 4. 多终端真实可见性和体验一致性
-
-## 主流程清单
-
-### 1. 聊天 Shell 初始化
-
-1. 打开聊天中心默认页，确认会自动跳到消息页。
-2. 确认消息列表、联系人、设置页签正常显示。
-3. 切换聊天排序设置后，消息列表顺序会刷新且不报错。
-
-预期：
-
-1. 页面初始化失败时出现统一错误提示。
-2. 离开聊天页不会残留“正在输入”状态。
+5. 离开聊天页不会残留“正在输入”状态。
 
 ### 2. 文本消息主链路
 
-1. 在 `A -> B` 单聊发送一条文本消息。
+1. 从 `A -> B` 的单聊发送一条文本消息。
 2. 观察发送端是否先出现本地发送态，再被服务端消息替换。
 3. 在 `B` 侧确认实时收到消息、会话预览更新、未读数变化。
 4. 切回 `A`，确认自己的消息不会重复残留本地占位项。
@@ -71,8 +53,8 @@ pnpm --dir d:/work/SolBot/bbot dev --host 127.0.0.1 --port 5173
 
 ### 3. 附件消息主链路
 
-1. 在 `A -> B` 单聊发送一张图片和一个普通文件。
-2. 验证发送端本地附件消息会被 ack 后服务端消息替换。
+1. 从 `A -> B` 的单聊发送一张图片和一个普通文件。
+2. 验证发送端本地附件消息会在 ack 后被服务端消息替换。
 3. 验证接收端能看到图片预览或文件卡片。
 
 预期：
@@ -103,10 +85,10 @@ pnpm --dir d:/work/SolBot/bbot dev --host 127.0.0.1 --port 5173
 预期：
 
 1. 单条转发会先弹确认框，再提交。
-2. 多条转发会先弹“转发方式”选择框。
+2. 多条转发会先选择目标，再弹“转发方式”选择框。
 3. 成功后会显示“转发成功”，并清空当前多选态。
 
-### 6. 聊天记录查看器
+### 6. 聊天记录查看
 
 1. 打开一条 `chat_record` 消息。
 2. 在查看器中复制一条普通消息、一条图片消息。

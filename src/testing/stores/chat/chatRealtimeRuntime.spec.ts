@@ -20,6 +20,7 @@ describe('createChatRealtimeRuntime', () => {
 
         const runtime = createChatRealtimeRuntime({
             activeConversationId: ref(null),
+            shouldAutoMarkRead: () => true,
             getCurrentUserId: () => 1,
             typingMap: {},
             typingTimers: new Map(),

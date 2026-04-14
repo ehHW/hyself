@@ -149,7 +149,7 @@ export const uploadFileWithCategory = async ({
         }
     }
 
-    const uploadedRes = await getUploadedChunksApi(fileMd5)
+    const uploadedRes = await getUploadedChunksApi(fileMd5, category)
     const uploadedSet = new Set(uploadedRes.data.uploaded_chunks || [])
     let finished = uploadedSet.size
     onChunkProgress?.(Math.floor((finished / totalChunks) * 100))
@@ -174,6 +174,9 @@ export const uploadFileWithCategory = async ({
         formData.append('file_md5', fileMd5)
         formData.append('chunk_index', String(chunkIndex))
         formData.append('chunk_md5', currentChunkMd5)
+        if (category) {
+            formData.append('category', category)
+        }
         formData.append('chunk', chunkBlob, `${file.name}.part${chunkIndex}`)
         await uploadChunkApi(formData)
 

@@ -55,6 +55,8 @@ export const useChatStore = defineStore('chat', () => {
         globalGroupJoinRequests,
         activeMembers,
         activeJoinRequests,
+        seenGroupNoticeIds,
+        unreadGroupNoticeCount,
     } = storeToRefs(groupStateStore)
     const { memberMap, joinRequestMap } = groupStateStore
     const assemblyRuntime = createChatAssemblyRuntime({
@@ -72,6 +74,7 @@ export const useChatStore = defineStore('chat', () => {
         seenPendingRequestIds,
         seenFriendNoticeIds,
         seenFriendSystemNoticeIds,
+        seenGroupNoticeIds,
         loadingMessages,
         sending,
         failedMessageMap,
@@ -125,6 +128,8 @@ export const useChatStore = defineStore('chat', () => {
             activeJoinRequests,
             groupNoticeItems,
             globalGroupJoinRequests,
+            seenGroupNoticeIds,
+            unreadGroupNoticeCount,
         },
     }
 

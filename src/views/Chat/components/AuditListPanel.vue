@@ -5,53 +5,47 @@
                 <div class="chat-panel__title">聊天巡检</div>
                 <div class="chat-panel__subtitle">管理员消息审查视图</div>
             </div>
-            <a-button type="primary" @click="handleLoadAudit">刷新</a-button>
         </header>
 
-        <a-input v-model:value="auditKeyword" allow-clear placeholder="搜索会话名或消息内容" @press-enter="handleLoadAudit" />
+        <a-input
+            v-model:value="auditKeyword"
+            allow-clear
+            placeholder="搜索会话名或消息内容"
+            @press-enter="handleLoadAudit"
+        />
 
         <div class="chat-panel__list">
-            <div v-for="conversation in chatAudit.adminConversations" :key="`audit-conversation-${conversation.id}`" class="drawer-list-item">
+            <div
+                v-for="conversation in chatAudit.adminConversations"
+                :key="`audit-conversation-${conversation.id}`"
+                class="drawer-list-item"
+            >
                 <div>
                     <div class="drawer-list-title">{{ conversation.name }}</div>
-                    <div class="drawer-list-desc">{{ conversation.type === 'group' ? '群聊' : '单聊' }} · {{ conversation.last_message_preview || '暂无消息' }}</div>
+                    <div class="drawer-list-desc">
+                        {{ conversation.type === "group" ? "群聊" : "单聊" }} ·
+                        {{ conversation.last_message_preview || "暂无消息" }}
+                    </div>
                 </div>
-                <a-button size="small" @click="openConversation(conversation.id)">查看</a-button>
+                <a-button
+                    size="small"
+                    @click="openConversation(conversation.id)"
+                    >查看</a-button
+                >
             </div>
-            <a-empty v-if="!chatAudit.adminConversations.length" description="暂无会话" />
+            <a-empty
+                v-if="!chatAudit.adminConversations.length"
+                description="暂无会话"
+            />
         </div>
     </section>
 </template>
 
 <script setup lang="ts">
-import { message } from 'ant-design-vue'
-import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { useChatShell } from '@/views/Chat/useChatShell'
-import { getErrorMessage } from '@/utils/error'
+import { useAuditScene } from "@/modules/chat-center/composables/useAuditScene";
 
-const router = useRouter()
-const { chatStore } = useChatShell()
-const chatAudit = chatStore.audit
-const chatConversation = chatStore.conversation
-const auditKeyword = ref('')
-
-const handleLoadAudit = async () => {
-    try {
-        await chatAudit.loadAuditData(auditKeyword.value.trim())
-    } catch (error: unknown) {
-        message.error(getErrorMessage(error, '加载巡检数据失败'))
-    }
-}
-
-const openConversation = async (conversationId: number) => {
-    await chatConversation.selectConversation(conversationId)
-    await router.push({ name: 'ChatMessages' })
-}
-
-onMounted(() => {
-    void handleLoadAudit()
-})
+const { auditKeyword, chatAudit, handleLoadAudit, openConversation } =
+    useAuditScene({ autoLoad: true });
 </script>
 
 <style scoped>

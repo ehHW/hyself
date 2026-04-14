@@ -34,6 +34,19 @@ instance.interceptors.response.use(
         const originalRequest = error.config
 
         if (
+            error.response?.status === 403 &&
+            error.response?.data?.error_code === 'permission_denied' &&
+            !originalRequest?._permissionContextRetried
+        ) {
+            originalRequest._permissionContextRetried = true
+            try {
+                await authStore.fetchPermissionContext()
+            } catch {
+                // Keep original permission denied error if context refresh fails.
+            }
+        }
+
+        if (
             error.response?.status === 401 &&
             !originalRequest?._retry &&
             originalRequest?.url !== 'auth/refresh/'

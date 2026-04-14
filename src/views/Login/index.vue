@@ -1,6 +1,6 @@
 <template>
     <div class="login-wrap">
-        <a-card title="Bbot 登录" class="login-card">
+        <a-card title="Hyself 登录" class="login-card">
             <a-form layout="vertical" :model="formState" @finish="handleSubmit">
                 <a-form-item label="用户名" name="username" :rules="loginFormRules.username">
                     <a-input v-model:value="formState.username" placeholder="请输入用户名" />

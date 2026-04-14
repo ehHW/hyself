@@ -13,14 +13,14 @@ type FriendshipNamespace = Pick<ChatAssemblyRuntime,
 >
 
 type GroupNamespace = Pick<ChatAssemblyRuntime,
-    'loadMembers' | 'loadJoinRequests' | 'loadGlobalGroupJoinRequests' | 'inviteMember' | 'removeMember' | 'updateMemberRole' | 'muteMember' | 'leaveConversation' | 'handleJoinRequest'
+    'loadMembers' | 'loadJoinRequests' | 'loadGlobalGroupJoinRequests' | 'inviteMember' | 'removeMember' | 'updateMemberRole' | 'muteMember' | 'leaveConversation' | 'transferOwner' | 'disbandConversation' | 'handleJoinRequest'
 >
 
 type MessageNamespace = Pick<ChatAssemblyRuntime,
     'loadMessages' | 'loadOlderMessages' | 'markConversationRead' | 'sendTextMessage' | 'sendAttachmentMessage' | 'sendTyping' | 'retryMessage' | 'revokeMessage' | 'deleteMessage' | 'restoreRevokedDraft'
 >
 
-type LifecycleNamespace = Pick<ChatAssemblyRuntime, 'initialized' | 'loading' | 'initialize'> & {
+type LifecycleNamespace = Pick<ChatAssemblyRuntime, 'initialized' | 'loading' | 'initialize' | 'bootstrapSummaries'> & {
     reset: () => void
 }
 
@@ -59,6 +59,7 @@ export function createChatFacade<TState extends ChatStateNamespaces>(options: {
         initialized: options.assembly.initialized,
         loading: options.assembly.loading,
         initialize: options.assembly.initialize,
+        bootstrapSummaries: options.assembly.bootstrapSummaries,
         reset,
     }
 
@@ -107,6 +108,8 @@ export function createChatFacade<TState extends ChatStateNamespaces>(options: {
         updateMemberRole: options.assembly.updateMemberRole,
         muteMember: options.assembly.muteMember,
         leaveConversation: options.assembly.leaveConversation,
+        transferOwner: options.assembly.transferOwner,
+        disbandConversation: options.assembly.disbandConversation,
         handleJoinRequest: options.assembly.handleJoinRequest,
     }
 

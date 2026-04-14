@@ -8,6 +8,7 @@ export type ChatRealtimeRuntime = ReturnType<typeof createChatRealtimeRuntime>
 
 export function createChatRealtimeRuntime(options: {
     activeConversationId: Ref<number | null>
+    shouldAutoMarkRead: () => boolean
     getCurrentUserId: () => number | undefined
     typingMap: Record<number, ChatUserBrief[]>
     typingTimers: Map<string, TypingTimer>

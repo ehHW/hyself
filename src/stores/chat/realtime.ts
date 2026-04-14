@@ -1,6 +1,7 @@
 import { message as antMessage } from 'ant-design-vue'
 import type { Ref } from 'vue'
 import type { ChatConversationItem, ChatGroupJoinRequestItem, ChatMessageItem, ChatUserBrief } from '@/types/chat'
+import { resolveRealtimeEventType, unwrapRealtimePayload } from '@/stores/chat/realtimeEvents'
 import type { WebSocketMessage } from '@/utils/websocket'
 import { globalWebSocket } from '@/utils/websocket'
 
@@ -44,6 +45,7 @@ export function handleTypingRealtimePayload(options: HandleTypingRealtimeOptions
 
 type ChatRealtimeHandlerOptions = {
     activeConversationId: Ref<number | null>
+    shouldAutoMarkRead: () => boolean
     getCurrentUserId: () => number | undefined
     typingMap: Record<number, ChatUserBrief[]>
     typingTimers: Map<string, TypingTimer>
@@ -103,10 +105,13 @@ export function createChatRealtimeHandler(options: ChatRealtimeHandlerOptions) {
             options.clearSendingState()
             return
         }
-        if (payload.type === 'chat_message_ack') {
-            const conversation = payload.conversation as ChatConversationItem | undefined
-            const nextMessage = payload.message as ChatMessageItem | undefined
-            const clientMessageId = typeof payload.client_message_id === 'string' ? payload.client_message_id : undefined
+        const eventType = resolveRealtimeEventType(payload)
+        const eventPayload = unwrapRealtimePayload(payload)
+
+        if (eventType === 'chat.message.ack') {
+            const conversation = eventPayload.conversation as ChatConversationItem | undefined
+            const nextMessage = eventPayload.message as ChatMessageItem | undefined
+            const clientMessageId = typeof eventPayload.client_message_id === 'string' ? eventPayload.client_message_id : undefined
             if (conversation) {
                 options.upsertConversation(conversation)
             }
@@ -117,68 +122,83 @@ export function createChatRealtimeHandler(options: ChatRealtimeHandlerOptions) {
             options.clearSendingState()
             return
         }
-        if (payload.type === 'chat_new_message') {
-            const conversationId = Number(payload.conversation_id)
-            const nextMessage = payload.message as ChatMessageItem | undefined
+        if (eventType === 'chat.message.created') {
+            const conversationId = Number(eventPayload.conversation_id)
+            const nextMessage = eventPayload.message as ChatMessageItem | undefined
             if (conversationId && nextMessage) {
                 options.upsertMessage(conversationId, { ...nextMessage, local_status: null, local_error: null })
                 options.syncConversationPreview(conversationId, nextMessage)
                 if (nextMessage.sender?.id === options.getCurrentUserId()) {
                     options.clearSendingState()
                 }
-                if (options.activeConversationId.value === conversationId && document.visibilityState === 'visible') {
+                if (
+                    options.activeConversationId.value === conversationId
+                    && document.visibilityState === 'visible'
+                    && options.shouldAutoMarkRead()
+                ) {
                     await options.markConversationRead(conversationId, nextMessage.sequence)
                 }
             }
             return
         }
-        if (payload.type === 'chat_message_updated') {
-            const conversationId = Number(payload.conversation_id)
-            const nextMessage = payload.message as ChatMessageItem | undefined
+        if (eventType === 'chat.message.updated') {
+            const conversationId = Number(eventPayload.conversation_id)
+            const nextMessage = eventPayload.message as ChatMessageItem | undefined
             if (conversationId && nextMessage) {
                 options.upsertMessage(conversationId, nextMessage)
                 options.syncConversationPreview(conversationId, nextMessage)
             }
             return
         }
-        if (payload.type === 'chat_conversation_updated') {
-            const conversation = payload.conversation as ChatConversationItem | undefined
+        if (eventType === 'chat.conversation.updated') {
+            const conversation = eventPayload.conversation as ChatConversationItem | undefined
             if (conversation) {
                 options.upsertConversation(conversation)
             }
             return
         }
-        if (payload.type === 'chat_unread_updated') {
-            options.setConversationUnread(Number(payload.conversation_id), Number(payload.unread_count || 0), Number(payload.last_read_sequence || 0) || undefined)
+        if (eventType === 'chat.unread.updated') {
+            options.setConversationUnread(Number(eventPayload.conversation_id), Number(eventPayload.unread_count || 0), Number(eventPayload.last_read_sequence || 0) || undefined)
             return
         }
-        if (payload.type === 'chat_friend_request_updated') {
+        if (eventType === 'chat.friend_request.updated') {
             await options.loadFriendRequests()
             return
         }
-        if (payload.type === 'chat_friendship_updated') {
-            const action = String(payload.action || '')
+        if (eventType === 'chat.friendship.updated') {
+            const action = String(eventPayload.action || '')
+            const conversation = eventPayload.conversation as ChatConversationItem | undefined
+            if (conversation) {
+                options.upsertConversation(conversation)
+            }
             if (action === 'updated') {
+                if (eventPayload.friend_user || conversation) {
+                    await options.loadFriends()
+                }
                 return
             }
-            await Promise.all([options.loadFriends(), options.loadConversations()])
+            const tasks: Array<Promise<unknown>> = [options.loadFriends()]
+            if (!conversation) {
+                tasks.push(options.loadConversations())
+            }
+            await Promise.all(tasks)
             return
         }
-        if (payload.type === 'chat_group_join_request_updated') {
-            const joinRequest = payload.join_request as ChatGroupJoinRequestItem | undefined
+        if (eventType === 'chat.group_join_request.updated') {
+            const joinRequest = eventPayload.join_request as ChatGroupJoinRequestItem | undefined
             if (joinRequest?.conversation_id) {
                 await options.loadJoinRequests(joinRequest.conversation_id)
             }
             await options.loadGlobalGroupJoinRequests()
             return
         }
-        if (payload.type === 'chat_typing') {
-            const conversationId = Number(payload.conversation_id)
+        if (eventType === 'chat.typing.updated') {
+            const conversationId = Number(eventPayload.conversation_id)
             if (!conversationId) {
                 return
             }
             handleTypingRealtimePayload({
-                payload,
+                payload: eventPayload,
                 conversationId,
                 currentUserId: options.getCurrentUserId(),
                 typingMap: options.typingMap,
@@ -187,28 +207,28 @@ export function createChatRealtimeHandler(options: ChatRealtimeHandlerOptions) {
             })
             return
         }
-        if (payload.type === 'system_notice' && payload.category === 'chat' && payload.message) {
-            const noticePayload = (payload.payload || {}) as Record<string, unknown>
+        if (eventType === 'chat.system_notice.created' && eventPayload.category === 'chat' && eventPayload.message) {
+            const noticePayload = (eventPayload.payload || {}) as Record<string, unknown>
             const noticeType = String(noticePayload.notice_type || '')
             if (noticeType.startsWith('friend_')) {
                 options.appendFriendNotice({
                     id: String(noticePayload.notice_id || `${Date.now()}_${Math.random().toString(16).slice(2)}`),
-                    title: String(payload.message),
+                    title: String(eventPayload.message),
                     description: String(noticePayload.description || ''),
-                    created_at: typeof payload.occurred_at === 'string' ? payload.occurred_at : new Date().toISOString(),
+                    created_at: typeof eventPayload.occurred_at === 'string' ? eventPayload.occurred_at : new Date().toISOString(),
                     payload: noticePayload,
                 })
-                antMessage.info(String(payload.message))
+                antMessage.info(String(eventPayload.message))
                 return
             }
             options.appendGroupNotice({
                 id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
                 conversation_id: typeof noticePayload.conversation_id === 'number' ? noticePayload.conversation_id : null,
-                message: String(payload.message),
-                created_at: typeof payload.occurred_at === 'string' ? payload.occurred_at : new Date().toISOString(),
+                message: String(eventPayload.message),
+                created_at: typeof eventPayload.occurred_at === 'string' ? eventPayload.occurred_at : new Date().toISOString(),
                 payload: noticePayload,
             })
-            antMessage.info(String(payload.message))
+            antMessage.info(String(eventPayload.message))
         }
     }
 }

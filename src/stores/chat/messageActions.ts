@@ -26,9 +26,8 @@ export async function loadMessagesAction(options: {
     cursorMap: Record<number, ChatMessageCursor>
     upsertConversation: (item: ChatConversationItem) => void
     loadMembers: (conversationId: number) => Promise<void>
-    markConversationRead: (conversationId: number, lastReadSequence: number) => Promise<void>
 }) {
-    const { conversationId, params, loadingMessages, messageMap, failedMessageMap, cursorMap, upsertConversation, loadMembers, markConversationRead } = options
+    const { conversationId, params, loadingMessages, messageMap, failedMessageMap, cursorMap, upsertConversation, loadMembers } = options
     loadingMessages.value = true
     try {
         const { data } = await getConversationMessagesApi(conversationId, params)
@@ -40,13 +39,8 @@ export async function loadMessagesAction(options: {
         cursorMap[conversationId] = data.cursor
         const detail = await getConversationDetailApi(conversationId)
         upsertConversation(detail.data)
-        if (detail.data.type === 'group') {
+        if (detail.data.type === 'group' && detail.data.access_mode === 'member') {
             await loadMembers(conversationId)
-        }
-        const lastMessage = data.items.at(-1)
-        const lastSequence = lastMessage?.sequence || 0
-        if (lastSequence && detail.data.unread_count > 0) {
-            await markConversationRead(conversationId, lastSequence)
         }
     } finally {
         loadingMessages.value = false

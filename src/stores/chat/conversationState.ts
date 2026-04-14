@@ -9,7 +9,10 @@ export const useConversationChatStore = defineStore('chat-conversation-state', (
     const focusedSequenceMap = reactive<Record<number, number | null>>({})
 
     const activeConversation = computed(() => conversations.value.find((item) => item.id === activeConversationId.value) || null)
-    const totalUnreadCount = computed(() => conversations.value.reduce((total, item) => total + item.unread_count, 0))
+    const totalUnreadCount = computed(() => conversations.value.reduce(
+        (total, item) => total + (item.member_settings?.mute_notifications ? 0 : item.unread_count),
+        0,
+    ))
 
     return {
         conversations,

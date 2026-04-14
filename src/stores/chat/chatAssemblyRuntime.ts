@@ -35,6 +35,7 @@ type ChatAssemblyActions = MessageRuntime & ConversationRuntime & FriendshipRunt
 
 export function createChatAssemblyRuntime(deps: {
     userStore: {
+        hasPermission: (code: string) => boolean
         user?: {
             id: number
             username: string
@@ -57,6 +58,7 @@ export function createChatAssemblyRuntime(deps: {
     seenPendingRequestIds: Ref<number[]>
     seenFriendNoticeIds: Ref<number[]>
     seenFriendSystemNoticeIds: Ref<string[]>
+    seenGroupNoticeIds: Ref<string[]>
     loadingMessages: Ref<boolean>
     sending: Ref<boolean>
     failedMessageMap: Ref<Record<number, ChatMessageItem[]>>
@@ -184,9 +186,12 @@ export function createChatAssemblyRuntime(deps: {
             upsertConversation,
             chatListSortMode: () => deps.settingsStore.chatListSortMode,
             loadMessages: async (conversationId: number, params?: { around_sequence?: number; limit?: number }) => runtime.loadMessages(conversationId, params),
+            getMessages: (conversationId: number) => deps.messageMap[conversationId] || [],
+            markConversationRead: async (conversationId: number, lastReadSequence: number) => runtime.markConversationRead(conversationId, lastReadSequence),
             loadFriends: async () => runtime.loadFriends(),
         }),
         createGroupOrchestration({
+            canLoadGlobalGroupJoinRequests: () => deps.userStore.hasPermission('chat.manage_group'),
             globalGroupJoinRequests: deps.globalGroupJoinRequests,
             conversations: deps.conversations,
             memberMap: deps.memberMap,
@@ -211,6 +216,7 @@ export function createChatAssemblyRuntime(deps: {
 
     const realtimeRuntime = createChatRealtimeRuntime({
         activeConversationId: deps.activeConversationId,
+        shouldAutoMarkRead: () => typeof window !== 'undefined' && window.location.pathname.includes('/chat-center/messages'),
         getCurrentUserId: () => deps.userStore.user?.id,
         typingMap: deps.typingMap,
         typingTimers: deps.typingTimers,
@@ -250,6 +256,19 @@ export function createChatAssemblyRuntime(deps: {
         })
     }
 
+    const bootstrapSummaries = async () => {
+        if (!deps.userStore.hasPermission('chat.view_conversation')) {
+            realtimeRuntime.dispose()
+            return
+        }
+        realtimeRuntime.ensureSubscription()
+        await Promise.allSettled([
+            runtime.loadConversations(deps.settingsStore.chatListSortMode),
+            runtime.loadFriendRequests(),
+            runtime.loadGlobalGroupJoinRequests(),
+        ])
+    }
+
     const reset = () => {
         resetChatLifecycle({
             conversations: deps.conversations,
@@ -258,6 +277,7 @@ export function createChatAssemblyRuntime(deps: {
             sentRequests: deps.sentRequests,
             seenPendingRequestIds: deps.seenPendingRequestIds,
             seenFriendNoticeIds: deps.seenFriendNoticeIds,
+            seenGroupNoticeIds: deps.seenGroupNoticeIds,
             friendNoticeItems: deps.friendNoticeItems,
             groupNoticeItems: deps.groupNoticeItems,
             globalGroupJoinRequests: deps.globalGroupJoinRequests,
@@ -283,6 +303,7 @@ export function createChatAssemblyRuntime(deps: {
         realtime: realtimeRuntime,
         ...runtime,
         initialize,
+        bootstrapSummaries,
         reset,
     }
 }

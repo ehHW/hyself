@@ -2,8 +2,8 @@ import type { ComputedRef, Ref } from 'vue'
 import { getAdminConversationsApi, getAdminMessagesApi, searchChatApi } from '@/api/chat'
 import type { ChatConversationItem, ChatMessageItem, ChatSearchResult } from '@/types/chat'
 
-export async function runSearchScene(keyword: string, searchResult: Ref<ChatSearchResult | null>) {
-    const { data } = await searchChatApi({ keyword, limit: 10 })
+export async function runSearchScene(keyword: string, searchResult: Ref<ChatSearchResult | null>, scope: 'connected' | 'discover' | 'audit' = 'connected') {
+    const { data } = await searchChatApi({ keyword, limit: 10, scope })
     searchResult.value = data
 }
 

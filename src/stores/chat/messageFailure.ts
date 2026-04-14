@@ -29,12 +29,15 @@ export function getWebSocketDisconnectedFailure(target: MessageFailureTarget) {
 export function getMessageFailureHint(error: string | null | undefined) {
     const normalizedError = String(error || '').trim()
     if (!normalizedError) {
-        return '发送失败'
+        return '发送失败，请重试'
     }
-    if (SCHEMA_ERROR_PATTERNS.some((pattern) => normalizedError.includes(pattern)) || PERMISSION_ERROR_PATTERNS.some((pattern) => normalizedError.includes(pattern))) {
-        return '发送失败'
+    if (SCHEMA_ERROR_PATTERNS.some((pattern) => normalizedError.includes(pattern))) {
+        return '请重试或刷新'
     }
-    return '发送失败'
+    if (PERMISSION_ERROR_PATTERNS.some((pattern) => normalizedError.includes(pattern))) {
+        return '无权限发送'
+    }
+    return normalizedError
 }
 
 export function getMessageFailureDetail(error: string | null | undefined) {

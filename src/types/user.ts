@@ -28,6 +28,11 @@ export interface UserItem {
     deleted_at: string | null
 }
 
+export interface PermissionContext {
+    permission_codes: string[]
+    visible_menu_keys: string[]
+}
+
 export interface LoginResponse {
     access: string
     refresh: string

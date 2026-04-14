@@ -7,7 +7,7 @@ import {
     updateGroupConfigScene,
 } from '@/stores/chat/conversationScenes'
 import { sortConversations } from '@/stores/chat/conversation'
-import type { ChatConversationItem } from '@/types/chat'
+import type { ChatConversationItem, ChatMessageItem } from '@/types/chat'
 
 export function createConversationOrchestration(deps: {
     loading: Ref<boolean>
@@ -18,6 +18,8 @@ export function createConversationOrchestration(deps: {
     upsertConversation: (conversation: ChatConversationItem) => void
     chatListSortMode: () => 'recent' | 'unread'
     loadMessages: (conversationId: number, params?: { around_sequence?: number; limit?: number }) => Promise<void>
+    getMessages: (conversationId: number) => ChatMessageItem[]
+    markConversationRead: (conversationId: number, lastReadSequence: number) => Promise<void>
     loadFriends: () => Promise<void>
 }) {
     const loadConversations = async (sortMode: 'recent' | 'unread' = 'recent') => {
@@ -26,7 +28,8 @@ export function createConversationOrchestration(deps: {
             const { data } = await getConversationsApi()
             deps.conversations.value = sortConversations(data.results, sortMode)
             const firstConversation = deps.conversations.value[0]
-            if (!deps.activeConversationId.value && firstConversation) {
+            const activeStillExists = deps.conversations.value.some((item) => item.id === deps.activeConversationId.value)
+            if ((!deps.activeConversationId.value || !activeStillExists) && firstConversation) {
                 deps.activeConversationId.value = firstConversation.id
             }
         } finally {
@@ -44,6 +47,11 @@ export function createConversationOrchestration(deps: {
         const focusSequence = options?.focusSequence
         deps.focusedSequenceMap[conversationId] = focusSequence ?? null
         await deps.loadMessages(conversationId, focusSequence ? { around_sequence: focusSequence, limit: 30 } : undefined)
+        const conversation = deps.conversations.value.find((item) => item.id === conversationId)
+        const lastSequence = deps.getMessages(conversationId).at(-1)?.sequence || 0
+        if (conversation && conversation.unread_count > 0 && lastSequence > 0) {
+            await deps.markConversationRead(conversationId, lastSequence)
+        }
     }
 
     const toggleConversationPin = async (conversationId: number, isPinned: boolean) => {

@@ -16,8 +16,12 @@ export function createChatSearchAuditRuntime(deps: {
     const adminMessages = ref<(ChatMessageItem & { conversation_id: number })[]>([])
     const isAuditAvailable = computed(() => deps.userStore.hasPermission('chat.review_all_messages') && deps.settingsStore.chatStealthInspectEnabled)
 
-    const runSearch = async (keyword: string) => {
-        await runSearchScene(keyword, searchResult)
+    const runSearch = async (keyword: string, scope: 'connected' | 'discover' | 'audit' = 'connected') => {
+        if (scope === 'connected') {
+            await runSearchScene(keyword, searchResult)
+            return
+        }
+        await runSearchScene(keyword, searchResult, scope)
     }
 
     const clearSearchResult = () => {

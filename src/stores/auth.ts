@@ -2,9 +2,25 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import router from '@/router'
-import { loginApi, profileApi, refreshTokenApi } from '@/api/user'
+import { loginApi, permissionContextApi, profileApi, refreshTokenApi } from '@/api/user'
+import { useChatStore } from '@/stores/chat'
+import { useSettingsStore } from '@/stores/settings'
 import { useUserStore } from '@/stores/user'
 import { globalWebSocket } from '@/utils/websocket'
+
+const getEnvelopeMessage = (payload: { message?: unknown; payload?: unknown }, fallback: string) => {
+    const nestedPayload = payload.payload
+    if (nestedPayload && typeof nestedPayload === 'object' && 'message' in nestedPayload) {
+        const nestedMessage = (nestedPayload as { message?: unknown }).message
+        if (nestedMessage) {
+            return String(nestedMessage)
+        }
+    }
+    if (payload.message) {
+        return String(payload.message)
+    }
+    return fallback
+}
 
 export const useAuthStore = defineStore(
     'auth',
@@ -12,6 +28,7 @@ export const useAuthStore = defineStore(
         const accessToken = ref<string>('')
         const refreshToken = ref<string>('')
         const userStore = useUserStore()
+        const settingsStore = useSettingsStore()
         let wsUnsubscribe: (() => void) | null = null
 
         const isLogin = computed(() => Boolean(accessToken.value))
@@ -22,6 +39,7 @@ export const useAuthStore = defineStore(
         }
 
         const clearAuth = () => {
+            const chatStore = useChatStore()
             if (wsUnsubscribe) {
                 wsUnsubscribe()
                 wsUnsubscribe = null
@@ -30,6 +48,7 @@ export const useAuthStore = defineStore(
             accessToken.value = ''
             refreshToken.value = ''
             userStore.clearUser()
+            chatStore.lifecycle.reset()
         }
 
         const ensureGlobalWsListener = () => {
@@ -37,11 +56,20 @@ export const useAuthStore = defineStore(
                 return
             }
             wsUnsubscribe = globalWebSocket.subscribe((payload) => {
-                if (payload.type !== 'force_logout') {
+                if (payload.type !== 'event') {
                     return
                 }
 
-                const forceLogoutMessage = String(payload.message || '您的账号已被强制下线')
+                if (payload.event_type === 'user.permission.updated') {
+                    void fetchProfile().catch(() => undefined)
+                    return
+                }
+
+                if (payload.event_type !== 'system.force_logout') {
+                    return
+                }
+
+                const forceLogoutMessage = getEnvelopeMessage(payload, '您的账号已被强制下线')
                 clearAuth()
                 if (router.currentRoute.value.path !== '/login') {
                     router.push('/login')
@@ -54,8 +82,10 @@ export const useAuthStore = defineStore(
             const { data } = await loginApi({ username, password })
             setTokens(data.access, data.refresh)
             userStore.setUser(data.user)
+            await fetchPermissionContext()
             globalWebSocket.connect(data.access, true)
             ensureGlobalWsListener()
+            void useChatStore().lifecycle.bootstrapSummaries()
             return data
         }
 
@@ -72,13 +102,32 @@ export const useAuthStore = defineStore(
             return data.access
         }
 
+        const fetchPermissionContext = async () => {
+            if (!accessToken.value) return null
+            const { data } = await permissionContextApi()
+            userStore.setAccessContext(data)
+            return data
+        }
+
         const fetchProfile = async () => {
             if (!accessToken.value) return null
             const { data } = await profileApi()
             userStore.setUser(data)
+            await fetchPermissionContext()
             globalWebSocket.connect(accessToken.value)
             ensureGlobalWsListener()
+            void useChatStore().lifecycle.bootstrapSummaries()
             return data
+        }
+
+        const refreshSessionContext = async () => {
+            if (!accessToken.value) return null
+
+            const [profile] = await Promise.all([
+                fetchProfile(),
+                settingsStore.loadChatPreferences().catch(() => null),
+            ])
+            return profile
         }
 
         const hasPermission = (code: string) => userStore.hasPermission(code)
@@ -91,6 +140,8 @@ export const useAuthStore = defineStore(
             clearAuth,
             ensureGlobalWsListener,
             fetchProfile,
+            fetchPermissionContext,
+            refreshSessionContext,
             refreshAccessToken,
             hasPermission,
             setTokens,

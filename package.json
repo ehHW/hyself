@@ -1,5 +1,5 @@
 {
-    "name": "bbot",
+    "name": "hyself",
     "version": "0.0.0",
     "private": true,
     "type": "module",
@@ -10,6 +10,9 @@
         "build-only": "vite build",
         "type-check": "vue-tsc --build",
         "test": "vitest run",
+        "test:browser:chat": "node scripts/browser-chat-navigation-regression.mjs",
+        "test:browser:rbac": "node scripts/browser-rbac-regression.mjs",
+        "test:browser:ux": "node scripts/browser-error-entertainment-regression.mjs",
         "format": "oxfmt src/"
     },
     "dependencies": {
@@ -38,6 +41,7 @@
         "jsdom": "^26.1.0",
         "npm-run-all2": "^8.0.4",
         "oxfmt": "^0.37.0",
+        "playwright": "1.52.0",
         "typescript": "~5.9.3",
         "unplugin-vue-components": "^32.0.0",
         "vite": "beta",

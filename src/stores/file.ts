@@ -24,10 +24,10 @@ export interface UploadTaskItem {
 }
 
 const toTaskId = () => `upload_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
-const UPLOAD_TASK_DB_NAME = 'bbot_upload_tasks_db'
+const UPLOAD_TASK_DB_NAME = 'hyself_upload_tasks_db'
 const UPLOAD_TASK_STORE_NAME = 'upload_tasks_store'
 const UPLOAD_TASKS_KEY = 'upload_tasks'
-const AUTO_RESUME_PAUSED_KEY = 'bbot_auto_resume_paused_tasks'
+const AUTO_RESUME_PAUSED_KEY = 'hyself_auto_resume_paused_tasks'
 
 const openUploadTaskDb = () => {
     return new Promise<IDBDatabase>((resolve, reject) => {
@@ -136,11 +136,12 @@ const calcOverallProgress = (task: Pick<UploadTaskItem, 'hashProgress' | 'chunkP
 
 export const useFileStore = defineStore('file', () => {
     const entries = ref<FileEntryItem[]>([])
-    const breadcrumbs = ref<Array<{ id: number | null; name: string; owner_user_id?: number | null }>>([{ id: null, name: '我的文件' }])
+    const breadcrumbs = ref<Array<{ id: number | null; name: string; owner_user_id?: number | null; virtual_path?: string | null }>>([{ id: null, name: '我的文件' }])
     const currentParentId = ref<number | null>(null)
     const currentParent = ref<FileEntryItem | null>(null)
     const currentScope = ref<FileManageScope>('user')
     const currentOwnerUserId = ref<number | null>(null)
+    const currentVirtualPath = ref<string | null>(null)
     const loadingEntries = ref(false)
 
     const uploadTasks = ref<UploadTaskItem[]>([])
@@ -183,22 +184,27 @@ export const useFileStore = defineStore('file', () => {
         currentParent.value = null
         currentParentId.value = null
         currentOwnerUserId.value = null
+        currentVirtualPath.value = null
         breadcrumbs.value = [{ id: null, name: scope === 'system' ? '系统文件' : '我的文件' }]
     }
 
-    const loadEntries = async (parentId?: number | null, ownerUserId?: number | null) => {
+    const loadEntries = async (parentId?: number | null, ownerUserId?: number | null, virtualPath?: string | null) => {
         loadingEntries.value = true
         try {
             const targetParentId = parentId === undefined ? currentParentId.value : parentId
             const targetOwnerUserId = currentScope.value === 'system'
                 ? (ownerUserId === undefined ? currentOwnerUserId.value : ownerUserId)
                 : null
-            const { data } = await getFileEntriesApi(targetParentId, currentScope.value, targetOwnerUserId)
+            const targetVirtualPath = currentScope.value === 'system'
+                ? (virtualPath === undefined ? currentVirtualPath.value : virtualPath)
+                : null
+            const { data } = await getFileEntriesApi(targetParentId, currentScope.value, targetOwnerUserId, targetVirtualPath)
             entries.value = data.items
             breadcrumbs.value = data.breadcrumbs
             currentParent.value = data.parent
-            currentParentId.value = data.parent?.id ?? (targetParentId ?? null)
+            currentParentId.value = data.parent?.is_virtual ? null : (data.parent?.id ?? (targetParentId ?? null))
             currentOwnerUserId.value = currentScope.value === 'system' ? (data.owner_user?.id ?? targetOwnerUserId ?? null) : null
+            currentVirtualPath.value = currentScope.value === 'system' ? (data.parent?.virtual_path ?? targetVirtualPath ?? null) : null
         } finally {
             loadingEntries.value = false
         }
@@ -206,6 +212,10 @@ export const useFileStore = defineStore('file', () => {
 
     const enterFolder = async (folder: FileEntryItem) => {
         if (!folder.is_dir) return
+        if (currentScope.value === 'system' && folder.is_virtual && folder.virtual_path) {
+            await loadEntries(null, null, folder.virtual_path)
+            return
+        }
         if (currentScope.value === 'system' && !currentOwnerUserId.value && folder.is_virtual && folder.owner_user_id) {
             await loadEntries(null, folder.owner_user_id)
             return
@@ -213,8 +223,8 @@ export const useFileStore = defineStore('file', () => {
         await loadEntries(folder.id)
     }
 
-    const goToBreadcrumb = async (item: { id: number | null; owner_user_id?: number | null }) => {
-        await loadEntries(item.id, item.owner_user_id ?? null)
+    const goToBreadcrumb = async (item: { id: number | null; owner_user_id?: number | null; virtual_path?: string | null }) => {
+        await loadEntries(item.virtual_path ? null : item.id, item.owner_user_id ?? null, item.virtual_path ?? null)
     }
 
     const createFolder = async (name: string, parentId?: number | null) => {
@@ -517,6 +527,7 @@ export const useFileStore = defineStore('file', () => {
         currentParent,
         currentScope,
         currentOwnerUserId,
+        currentVirtualPath,
         loadingEntries,
         uploadTasks,
         overallUploadProgress,

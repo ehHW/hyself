@@ -1,12 +1,21 @@
 import type { ListResult } from '@/types/user'
 
 export type ChatConversationType = 'direct' | 'group'
-export type ChatAccessMode = 'member' | 'stealth_readonly'
+export type ChatAccessMode = 'member' | 'stealth_readonly' | 'former_member_readonly' | 'discover_preview'
 export type ChatMessageType = 'text' | 'system' | 'image' | 'file' | 'chat_record'
 export type ChatMemberRole = 'owner' | 'admin' | 'member'
 export type ChatRequestStatus = 'pending' | 'accepted' | 'rejected' | 'canceled' | 'expired'
 export type ChatJoinRequestStatus = 'pending' | 'approved' | 'rejected' | 'canceled'
 export type ChatLocalMessageStatus = 'sending' | 'failed'
+
+export interface ChatVideoSubtitleTrack {
+    language: string
+    label: string
+    path?: string
+    url: string
+    default?: boolean
+    forced?: boolean
+}
 
 export interface ChatVideoProcessingMetadata {
     status?: string
@@ -16,6 +25,7 @@ export interface ChatVideoProcessingMetadata {
     height?: number | null
     playlist_url?: string
     thumbnail_url?: string
+    subtitle_tracks?: ChatVideoSubtitleTrack[]
     error?: string
 }
 
@@ -38,6 +48,19 @@ export interface ChatConversationMemberSettings {
     group_nickname: string
 }
 
+export interface ChatConversationCapabilities {
+    can_view: boolean
+    can_open: boolean
+    can_read_history: boolean
+    can_send_message: boolean
+    can_mark_read: boolean
+    can_view_members: boolean
+    can_manage_members: boolean
+    can_manage_group_settings: boolean
+    can_invite_members: boolean
+    can_join: boolean
+}
+
 export interface ChatConversationItem {
     id: number
     type: ChatConversationType
@@ -54,6 +77,7 @@ export interface ChatConversationItem {
     last_message_at: string | null
     member_count: number
     can_send_message: boolean
+    capabilities?: ChatConversationCapabilities
     status: string
     last_read_sequence: number
     member_settings: ChatConversationMemberSettings
@@ -86,6 +110,7 @@ export interface ChatMessageAssetPayload {
     stream_url?: string
     thumbnail_url?: string
     processing_status?: string
+    subtitle_tracks?: ChatVideoSubtitleTrack[]
     upload_progress?: number
     upload_phase?: 'uploading' | 'sending'
     local_upload_id?: string
@@ -152,6 +177,7 @@ export interface ChatComposerAttachmentToken {
     stream_url?: string
     thumbnail_url?: string
     processing_status?: string
+    subtitle_tracks?: ChatVideoSubtitleTrack[]
     local_upload_id?: string
 }
 
@@ -172,6 +198,7 @@ export interface ChatMessageListResult {
         type: ChatConversationType
         access_mode: ChatAccessMode
         can_send_message: boolean
+        capabilities?: ChatConversationCapabilities
     }
     cursor: ChatMessageCursor
     items: ChatMessageItem[]
@@ -246,6 +273,7 @@ export interface ChatSearchConversationItem {
     type: ChatConversationType
     name: string
     access_mode: ChatAccessMode
+    capabilities?: ChatConversationCapabilities
 }
 
 export interface ChatSearchUserItem {

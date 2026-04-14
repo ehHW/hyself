@@ -61,7 +61,6 @@ export function createMessageOrchestration(deps: {
             cursorMap: deps.cursorMap,
             upsertConversation: deps.upsertConversation,
             loadMembers: deps.loadMembers,
-            markConversationRead: deps.markConversationRead,
         })
     }
 

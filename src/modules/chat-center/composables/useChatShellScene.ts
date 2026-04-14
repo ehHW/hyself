@@ -1,10 +1,12 @@
 import dayjs from 'dayjs'
 import { message } from 'ant-design-vue'
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, unref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useChatCapabilityScene } from '@/modules/chat-center/composables/useChatCapabilityScene'
 import { useChatStore, type ChatStoreFacade } from '@/stores/chat'
 import { useSettingsStore } from '@/stores/settings'
 import { useUserStore } from '@/stores/user'
+import { subscribeAppRefresh } from '@/utils/appRefresh'
 import type { ChatMessageItem } from '@/types/chat'
 import { getErrorMessage } from '@/utils/error'
 
@@ -21,6 +23,7 @@ export function useChatShellScene(options?: { bootstrap?: boolean }) {
     const chatMessage = chatStore.message
     const settingsStore = useSettingsStore()
     const userStore = useUserStore()
+    const { activeConversationCapabilities } = useChatCapabilityScene()
     const router = useRouter()
     const route = useRoute()
 
@@ -30,8 +33,8 @@ export function useChatShellScene(options?: { bootstrap?: boolean }) {
     const formatDateTime = (value: string | null) => (value ? dayjs(value).format('YYYY-MM-DD HH:mm:ss') : '')
     const isSelfMessage = (messageItem: ChatMessageItem) => messageItem.sender?.id === userStore.user?.id
     const messageRowClass = (messageItem: ChatMessageItem) => ({ self: isSelfMessage(messageItem), system: messageItem.is_system })
-    const canManageMembers = computed(() => ['owner', 'admin'].includes(chatConversationState.activeConversation?.member_role || ''))
-    const canEditRoles = computed(() => chatConversationState.activeConversation?.member_role === 'owner')
+    const canManageMembers = computed(() => activeConversationCapabilities.value.canManageMembers)
+    const canEditRoles = computed(() => activeConversationCapabilities.value.canManageGroupSettings)
     const canLoadOlderMessages = computed(() => {
         const activeId = chatConversationState.activeConversationId
         if (!activeId) {
@@ -41,15 +44,19 @@ export function useChatShellScene(options?: { bootstrap?: boolean }) {
         return firstSequence > 1
     })
     const typingText = computed(() => {
-        if (chatConversationState.activeConversation?.type !== 'direct') {
+        const activeConversation = chatConversationState.activeConversation
+        if (activeConversation?.type && activeConversation.type !== 'direct') {
             return ''
         }
         if (!chatMessageState.typingUsers.length) {
             return ''
         }
-        return '对方正在输入'
+        const typingUser = chatMessageState.typingUsers[0]
+        const displayName = typingUser?.display_name || typingUser?.username || '对方'
+        return `${displayName} 正在输入...`
     })
-    const isStealthAuditEnabled = computed(() => chatAudit.isAuditAvailable)
+    const isStealthAuditEnabled = computed(() => Boolean(unref(chatAudit.isAuditAvailable)))
+    let unsubscribeAppRefresh: (() => void) | null = null
 
     const initializeChat = async () => {
         try {
@@ -67,12 +74,49 @@ export function useChatShellScene(options?: { bootstrap?: boolean }) {
         }
     }
 
+    const refreshCurrentChatScene = async () => {
+        try {
+            await settingsStore.loadChatPreferences()
+        } catch {
+            // ignore and use local persisted settings
+        }
+
+        const tasks: Array<Promise<unknown>> = [
+            chatConversation.loadConversations(settingsStore.chatListSortMode),
+            chatConversation.loadContactGroupConversations(),
+            chatStore.friendship.loadFriends(),
+            chatStore.friendship.loadFriendRequests(),
+        ]
+
+        if (userStore.hasPermission('chat.manage_group')) {
+            tasks.push(chatStore.group.loadGlobalGroupJoinRequests())
+        }
+
+        if (chatConversationState.activeConversationId) {
+            tasks.push(
+                chatStore.message.loadMessages(
+                    chatConversationState.activeConversationId,
+                ),
+            )
+        }
+
+        const routeName = String(route.name || '')
+        if (routeName.includes('Audit') || routeName === 'ChatSettingsInspect') {
+            tasks.push(chatAudit.loadAuditData())
+        }
+
+        await Promise.allSettled(tasks)
+    }
+
     if (options?.bootstrap) {
         onMounted(() => {
             if (!bootstrapped || !chatLifecycle.initialized) {
                 bootstrapped = true
                 void initializeChat()
             }
+            unsubscribeAppRefresh = subscribeAppRefresh(async () => {
+                await refreshCurrentChatScene()
+            })
         })
 
         watch(
@@ -83,6 +127,8 @@ export function useChatShellScene(options?: { bootstrap?: boolean }) {
         )
 
         onBeforeUnmount(() => {
+            unsubscribeAppRefresh?.()
+            unsubscribeAppRefresh = null
             chatMessage.sendTyping(false)
         })
     }

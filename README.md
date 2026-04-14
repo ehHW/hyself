@@ -1,18 +1,8 @@
-# bbot 前端
+# hyself 前端
 
-基于 Vue 3 + TypeScript + Vite + Ant Design Vue 的后台前端。当前主线以 V1 可用版本为基础，已经落地一批 Chat V2 重构与附件能力。
+基于 Vue 3、TypeScript、Vite 和 Ant Design Vue 的后台前端项目，当前主线已经完成 Chat V2、资源中心、权限中心和基础娱乐页的整合。
 
-项目当前覆盖以下核心业务：
-
-- 登录鉴权与 JWT 续期
-- 首页与基础布局
-- 资源中心
-- 文件上传队列与断点续传
-- 回收站与同 MD5 去重恢复
-- 聊天室 V1 + V2 过渡能力
-- 用户 / 角色 / 权限管理
-- 个人中心与系统设置
-- 娱乐中心中的 2048 页面
+仓库地址：<https://github.com/ehHW/hyself.git>
 
 ## 技术栈
 
@@ -20,13 +10,11 @@
 - TypeScript
 - Vite
 - Pinia
-- pinia-plugin-persistedstate
 - Vue Router
 - Ant Design Vue
 - Axios
-- Day.js
-- Cropper.js / vue-cropper
-- spark-md5
+- Vitest
+- Playwright
 
 ## 运行环境
 
@@ -39,118 +27,87 @@
 pnpm install
 ```
 
-## 开发启动
+## 启动开发环境
+
+在项目目录内启动：
 
 ```bash
-pnpm dev
+pnpm dev --host 127.0.0.1 --port 5174
 ```
 
-如果你是在 workspace 根目录 `d:/work/SolBot` 启动，而不是先切进 `bbot/`，请使用下面这条命令，避免把当前目录留在根目录导致命令上下文不一致：
+如果你从工作区根目录启动：
 
 ```bash
-pnpm --dir d:/work/SolBot/bbot dev --host 127.0.0.1 --port 5173
+pnpm --dir ./hyself dev --host 127.0.0.1 --port 5174
 ```
 
-默认通过 Vite 代理转发到本地后端：
+默认代理目标：
 
-- /api -> <http://127.0.0.1:8000/>
-- /ws/ -> ws://127.0.0.1:8000/ws/
-- /uploads -> <http://127.0.0.1:8000/uploads>
+- /api -> <http://127.0.0.1:8000>
+- /ws/ -> ws://127.0.0.1:8000
+- /uploads -> <http://127.0.0.1:8000>
+
+可选环境变量：
+
+- HYSELF_API_PROXY_TARGET: 覆盖 /api、/uploads 以及默认 ws 代理目标
+- HYSELF_WS_PROXY_TARGET: 单独覆盖 /ws/ 代理目标
+
+当本机 8000 端口被旧进程占用时，可以这样启动：
+
+```powershell
+$env:HYSELF_API_PROXY_TARGET='http://127.0.0.1:8001'
+pnpm dev --host 127.0.0.1 --port 5174
+```
 
 ## 常用命令
 
 ```bash
-# 类型检查
 pnpm type-check
-
-# 单元测试
 pnpm test
-
-# 构建生产包
 pnpm build
-
-# 仅执行 Vite 打包
 pnpm build-only
-
-# 本地预览生产包
 pnpm preview
-
-# 格式化 src 目录
 pnpm format
+pnpm run test:browser:chat
+pnpm run test:browser:rbac
+pnpm run test:browser:ux
 ```
 
-## 当前页面结构
+## 功能范围
 
-主导航当前与代码一致，包含以下分区：
+- 登录鉴权与 JWT 续期
+- 首页与全局布局
+- 资源中心、上传队列、回收站
+- Chat V1 到 V2 的过渡能力
+- 用户、角色、权限管理
+- 个人中心与系统设置
+- 娱乐中心中的 2048、音乐、视频入口
+
+## 页面结构
+
+主导航当前包含：
 
 1. 首页
 2. 资源中心
 3. 聊天室
-4. 权限中心
+4. 管理中心
 5. 娱乐中心
 6. 账号设置
 
 其中：
 
-- 资源中心统一承载文件管理与上传任务，旧的 /upload-center 已作为兼容跳转保留
-- 聊天室已包含消息区、联系人、好友通知、群通知、聊天巡检和快捷键设置
-- 权限中心包含用户管理、角色管理、权限管理
-- 账号设置包含个人中心和系统设置
-- 音乐页已从 V1 主导航中移除，保留到后续版本再处理
+- 资源中心统一承载文件管理与上传任务，旧的 /upload-center 仅保留兼容跳转
+- 聊天室已包含消息页、联系人、好友通知、群通知、快捷键设置和巡检模式
+- 管理中心包含用户管理、角色管理、权限管理
+- 账号设置包含个人资料、密码修改和系统设置
 
-## 当前功能说明
+## Chat V2 已完成项
 
-### 资源中心
-
-- 面包屑目录导航
-- 文件 / 文件夹搜索
-- 新建文件夹、重命名、删除、还原
-- 回收站浏览、批量恢复、批量彻底删除、清空回收站
-- 上传目录选择
-- 上传任务队列
-- 小文件直传与大文件分片上传
-- 上传文件快照，降低源文件持续写入导致的上传失败
-- 兼容同 MD5 文件从回收站恢复到当前所选目录
-- 我的资源列表只展示资源中心引用；聊天中产生的附件只有在显式保存后才会进入我的资源
-- 用户删除资源时统一进入回收站，不在我的资源中继续显示；回收站目录内展示真实回收项而不是活动引用残影
-
-### 聊天室
-
-- 单聊与群聊
-- 会话列表、会话置顶、会话隐藏
-- 文本消息实时收发
-- 图片 / 文件附件消息发送
-- 视频附件气泡优先显示服务端缩略图，缩略图缺失或损坏时前端会退回首帧抓图
-- 历史消息加载
-- 富文本输入区与附件选择器
-- 消息转发、引用、多选
-- 单条逐条转发与多选合并转发
-- 聊天记录消息卡片与递归查看器
-- 好友申请、好友列表、好友备注
-- 群成员管理、邀请、移除、角色调整、快捷禁言
-- 全员禁言与群成员权限控制
-- 群通知与好友通知整合入口
-- 用户聊天偏好与快捷键设置
-- 管理员聊天巡检视图
-
-## Chat V2 进展
-
-当前前端已经完成以下 V2 方向改造：
-
-- 聊天 store 已按会话、消息、好友、群组、实时事件等职责拆分到 src/stores/chat/
-- WebSocket 事件消费已对齐标准化事件 envelope
-- 聊天输入区已支持附件消息、重试与更完整的发送交互
-- 聊天工作区已补充转发、选择、多场景操作等桌面 IM 体验
-- 多选转发已支持逐条转发和合并为聊天记录消息
-- 聊天记录支持摘要卡片、递归弹窗查看、嵌套转发和附件直接下载
-
-### 设置与账号
-
-- 个人资料维护与头像裁剪上传
-- 点击头像直接上传并裁剪
-- 个人中心自助修改密码
-- 系统标题与主题模式
-- 聊天通知、列表排序、隐身巡检开关、发送快捷键
+- 聊天状态已按会话、消息、好友、群组、实时事件拆分到 src/stores/chat/
+- WebSocket 事件消费已统一为 envelope 结构
+- 聊天输入区支持附件消息、重试与失败态提示
+- 聊天工作区支持转发、引用、多选和聊天记录查看器
+- 浏览器回归脚本已覆盖聊天导航、RBAC 和错误页/娱乐中心链路
 
 ## 目录结构
 
@@ -164,31 +121,27 @@ src/
   Layout/         # 全局布局
   router/         # 路由配置
   stores/         # Pinia 状态管理
+  testing/        # 单测辅助代码
+  tools/          # 工具映射和访问标签等逻辑
   types/          # 前端类型定义
-  utils/          # 请求、格式化、上传、WebSocket 等工具
-  validators/     # 前端校验逻辑
+  utils/          # 请求、上传、WebSocket 等工具
+  validators/     # 表单和业务校验
   views/          # 页面与业务组件
   workers/        # Web Worker
 ```
 
-## 联调说明
+## 联调建议
 
-1. 先启动后端服务，默认使用 8000 端口。
-2. 如果要验证聊天实时能力，后端需以 ASGI 方式运行，并确保 Redis 可用。
-3. 再启动前端开发服务。
-4. 浏览器访问 Vite 输出的本地地址。
+1. 先启动 hyself_server，聊天联调建议使用 ASGI 方式。
+2. 确保 Redis 可用，否则聊天实时链路和 Celery 无法完整验证。
+3. 再启动 hyself 前端。
+4. 浏览器访问 Vite 输出地址并执行手工清单或浏览器回归脚本。
 
-## 相关代码位置
+## 相关文档
 
-- 路由主入口：src/router/routes.ts
-- 请求实例：src/utils/request.ts
-- 上传状态管理：src/stores/file.ts
-- 聊天状态管理：src/stores/chat.ts
-- 聊天领域拆分：src/stores/chat/
-- 聊天页面入口：src/views/Chat/
-- 资源中心入口：src/views/FileManage/
+- docs/v2-release-acceptance-checklist.md
+- docs/chat-message-flow-manual-checklist.md
 
 ## 备注
 
-- 页面壳层高度已统一通过 src/assets/css/base.css 中的 CSS 变量控制。
-- 当前仓库仍保留部分 V1 命名，但聊天主线能力已经进入 V2 过渡阶段。
+- 页面壳层高度统一通过 src/assets/css/base.css 中的 CSS 变量控制。

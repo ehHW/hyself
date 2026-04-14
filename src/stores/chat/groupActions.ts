@@ -1,5 +1,6 @@
 import type { Ref } from 'vue'
 import {
+    disbandGroupConversationApi,
     getConversationMembersApi,
     getGroupJoinRequestsApi,
     handleGroupJoinRequestApi,
@@ -7,6 +8,7 @@ import {
     leaveConversationApi,
     muteConversationMemberApi,
     removeConversationMemberApi,
+    transferGroupOwnerApi,
     updateConversationMemberRoleApi,
     updateConversationPreferenceApi,
     updateGroupConfigApi,
@@ -50,6 +52,14 @@ export async function muteMemberAction(conversationId: number, userId: number, m
 
 export async function leaveConversationAction(conversationId: number) {
     await leaveConversationApi(conversationId)
+}
+
+export async function transferGroupOwnerAction(conversationId: number, targetUserId: number) {
+    await transferGroupOwnerApi(conversationId, targetUserId)
+}
+
+export async function disbandGroupConversationAction(conversationId: number) {
+    await disbandGroupConversationApi(conversationId)
 }
 
 export async function handleJoinRequestAction(requestId: number, action: 'approve' | 'reject' | 'cancel') {

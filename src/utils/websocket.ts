@@ -292,38 +292,9 @@ class GlobalWebSocketManager {
         this.socket = null
     }
 
-    private normalizeEventMessage(payload: WebSocketMessage): WebSocketMessage {
-        if (payload.type !== 'event' || typeof payload.event_type !== 'string') {
-            return payload
-        }
-
-        const eventPayload = typeof payload.payload === 'object' && payload.payload ? (payload.payload as Record<string, unknown>) : {}
-        const eventTypeMap: Record<string, string> = {
-            'system.force_logout': 'force_logout',
-            'chat.message.ack': 'chat_message_ack',
-            'chat.message.created': 'chat_new_message',
-            'chat.message.updated': 'chat_message_updated',
-            'chat.conversation.updated': 'chat_conversation_updated',
-            'chat.unread.updated': 'chat_unread_updated',
-            'chat.friend_request.updated': 'chat_friend_request_updated',
-            'chat.friendship.updated': 'chat_friendship_updated',
-            'chat.group_join_request.updated': 'chat_group_join_request_updated',
-            'chat.typing.updated': 'chat_typing',
-            'chat.system_notice.created': 'system_notice',
-        }
-
-        return {
-            ...eventPayload,
-            type: eventTypeMap[payload.event_type] || payload.event_type,
-            event_type: payload.event_type,
-            domain: typeof payload.domain === 'string' ? payload.domain : undefined,
-            occurred_at: typeof payload.occurred_at === 'string' ? payload.occurred_at : undefined,
-        }
-    }
-
     private parseMessage(raw: string): WebSocketMessage {
         try {
-            return this.normalizeEventMessage(JSON.parse(raw) as WebSocketMessage)
+            return JSON.parse(raw) as WebSocketMessage
         } catch {
             return { type: 'text', message: raw }
         }

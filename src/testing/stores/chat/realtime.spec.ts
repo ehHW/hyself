@@ -22,6 +22,7 @@ async function flushPromises() {
 function createRealtimeOptions() {
     const runtimeOptions = {
         activeConversationId: ref<number | null>(12),
+        shouldAutoMarkRead: () => true,
         getCurrentUserId: () => 7,
         typingMap: {} as Record<number, Array<{ id: number; username: string; display_name: string; avatar: string }>>,
         typingTimers: new Map<string, ReturnType<typeof setTimeout>>(),
@@ -104,10 +105,13 @@ describe('chat realtime handler', () => {
         const messageItem = { id: 99, sequence: 3, content: 'hello', created_at: '2026-01-01T00:00:00Z' }
 
         await handler({
-            type: 'chat_message_ack',
-            conversation,
-            message: messageItem,
-            client_message_id: 'client-1',
+            type: 'event',
+            event_type: 'chat.message.ack',
+            payload: {
+                conversation,
+                message: messageItem,
+                client_message_id: 'client-1',
+            },
         } as never)
 
         expect(options.upsertConversation).toHaveBeenCalledWith(conversation)
@@ -127,9 +131,12 @@ describe('chat realtime handler', () => {
         }
 
         await handler({
-            type: 'chat_new_message',
-            conversation_id: 12,
-            message: nextMessage,
+            type: 'event',
+            event_type: 'chat.message.created',
+            payload: {
+                conversation_id: 12,
+                message: nextMessage,
+            },
         } as never)
 
         expect(options.upsertMessage).toHaveBeenCalledWith(12, expect.objectContaining({ id: 66, local_status: null, local_error: null }))
@@ -142,8 +149,8 @@ describe('chat realtime handler', () => {
         const handler = createChatRealtimeHandler(options)
         const conversation = { id: 21, name: '更新会话' }
 
-        await handler({ type: 'chat_conversation_updated', conversation })
-        await handler({ type: 'chat_unread_updated', conversation_id: 21, unread_count: 4, last_read_sequence: 9 })
+        await handler({ type: 'event', event_type: 'chat.conversation.updated', payload: { conversation } } as never)
+        await handler({ type: 'event', event_type: 'chat.unread.updated', payload: { conversation_id: 21, unread_count: 4, last_read_sequence: 9 } } as never)
 
         expect(options.upsertConversation).toHaveBeenCalledWith(conversation)
         expect(options.setConversationUnread).toHaveBeenCalledWith(21, 4, 9)
@@ -152,21 +159,50 @@ describe('chat realtime handler', () => {
     it('refreshes friend request and friendship related lists', async () => {
         const handler = createChatRealtimeHandler(options)
 
-        await handler({ type: 'chat_friend_request_updated' })
-        await handler({ type: 'chat_friendship_updated', action: 'deleted' })
-        await handler({ type: 'chat_friendship_updated', action: 'updated' })
+        await handler({ type: 'event', event_type: 'chat.friend_request.updated', payload: {} } as never)
+        await handler({ type: 'event', event_type: 'chat.friendship.updated', payload: { action: 'deleted' } } as never)
+        await handler({ type: 'event', event_type: 'chat.friendship.updated', payload: { action: 'updated' } } as never)
 
         expect(options.loadFriendRequests).toHaveBeenCalledOnce()
         expect(options.loadFriends).toHaveBeenCalledOnce()
         expect(options.loadConversations).toHaveBeenCalledOnce()
     })
 
+    it('prefers friendship event conversation payload over full conversation reload', async () => {
+        const handler = createChatRealtimeHandler(options)
+        const conversation = {
+            id: 33,
+            type: 'direct',
+            name: '新好友会话',
+            access_mode: 'member',
+            can_send_message: true,
+            capabilities: {
+                can_open: true,
+            },
+        }
+
+        await handler({
+            type: 'event',
+            event_type: 'chat.friendship.updated',
+            payload: {
+                action: 'accepted',
+                friend_user: { id: 10 },
+                conversation,
+            },
+        } as never)
+
+        expect(options.upsertConversation).toHaveBeenCalledWith(conversation)
+        expect(options.loadFriends).toHaveBeenCalledOnce()
+        expect(options.loadConversations).not.toHaveBeenCalled()
+    })
+
     it('refreshes join request lists from group join events', async () => {
         const handler = createChatRealtimeHandler(options)
 
         await handler({
-            type: 'chat_group_join_request_updated',
-            join_request: { conversation_id: 35 },
+            type: 'event',
+            event_type: 'chat.group_join_request.updated',
+            payload: { join_request: { conversation_id: 35 } },
         })
 
         expect(options.loadJoinRequests).toHaveBeenCalledWith(35)
@@ -217,10 +253,14 @@ describe('chat realtime handler', () => {
         const handler = createChatRealtimeHandler(options)
 
         await handler({
-            type: 'system_notice',
-            category: 'chat',
-            message: '你已加入群聊',
-            payload: { conversation_id: 88 },
+            type: 'event',
+            event_type: 'chat.system_notice.created',
+            occurred_at: '2026-01-01T00:00:00Z',
+            payload: {
+                category: 'chat',
+                message: '你已加入群聊',
+                payload: { conversation_id: 88 },
+            },
         })
 
         expect(options.appendGroupNotice).toHaveBeenCalledWith(expect.objectContaining({
@@ -241,4 +281,5 @@ describe('chat realtime handler', () => {
         expect(options.upsertMessage).not.toHaveBeenCalled()
         expect(options.clearSendingState).not.toHaveBeenCalled()
     })
+
 })

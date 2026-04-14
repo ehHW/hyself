@@ -1,5 +1,5 @@
 import { handleJoinRequestAction } from '@/stores/chat/groupActions'
-import { inviteMemberAction, leaveConversationAction, muteMemberAction, removeMemberAction, updateMemberRoleAction } from '@/stores/chat/groupActions'
+import { disbandGroupConversationAction, inviteMemberAction, leaveConversationAction, muteMemberAction, removeMemberAction, transferGroupOwnerAction, updateMemberRoleAction } from '@/stores/chat/groupActions'
 
 export async function inviteMemberScene(options: {
     conversationId: number
@@ -59,6 +59,33 @@ export async function leaveConversationScene(options: {
     await leaveConversationAction(options.conversationId)
     await options.loadConversations()
     await options.loadContactGroupConversations()
+}
+
+export async function transferGroupOwnerScene(options: {
+    conversationId: number
+    targetUserId: number
+    loadMembers: (conversationId: number) => Promise<void>
+    loadConversations: () => Promise<void>
+    loadContactGroupConversations: () => Promise<void>
+}) {
+    await transferGroupOwnerAction(options.conversationId, options.targetUserId)
+    await Promise.all([
+        options.loadMembers(options.conversationId),
+        options.loadConversations(),
+        options.loadContactGroupConversations(),
+    ])
+}
+
+export async function disbandGroupConversationScene(options: {
+    conversationId: number
+    loadConversations: () => Promise<void>
+    loadContactGroupConversations: () => Promise<void>
+}) {
+    await disbandGroupConversationAction(options.conversationId)
+    await Promise.all([
+        options.loadConversations(),
+        options.loadContactGroupConversations(),
+    ])
 }
 
 export async function handleJoinRequestScene(options: {

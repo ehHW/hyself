@@ -1,5 +1,5 @@
 import instance from '@/utils/request'
-import type { ListResult, LoginResponse, PermissionItem, RoleItem, UserItem } from '@/types/user'
+import type { ListResult, LoginResponse, PermissionContext, PermissionItem, RoleItem, UserItem } from '@/types/user'
 
 export const loginApi = (payload: { username: string; password: string }) => {
     return instance.post<LoginResponse>('auth/login/', payload)
@@ -11,6 +11,10 @@ export const refreshTokenApi = (refresh: string) => {
 
 export const profileApi = () => {
     return instance.get<UserItem>('auth/profile/')
+}
+
+export const permissionContextApi = () => {
+    return instance.get<PermissionContext>('auth/permission-context/')
 }
 
 export const updateProfileApi = (payload: {

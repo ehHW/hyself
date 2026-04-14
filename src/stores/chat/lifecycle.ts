@@ -41,6 +41,7 @@ export function resetChatLifecycle(options: {
     sentRequests: Ref<unknown[]>
     seenPendingRequestIds: Ref<number[]>
     seenFriendNoticeIds: Ref<number[]>
+    seenGroupNoticeIds: Ref<string[]>
     friendNoticeItems: Ref<unknown[]>
     groupNoticeItems: Ref<unknown[]>
     globalGroupJoinRequests: Ref<unknown[]>
@@ -63,6 +64,7 @@ export function resetChatLifecycle(options: {
     options.sentRequests.value = []
     options.seenPendingRequestIds.value = []
     options.seenFriendNoticeIds.value = []
+    options.seenGroupNoticeIds.value = []
     options.friendNoticeItems.value = []
     options.groupNoticeItems.value = []
     options.globalGroupJoinRequests.value = []

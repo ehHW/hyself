@@ -1,5 +1,5 @@
 <template>
-    <a-layout-footer class="footer">Bbot ©2026 由 HY 创建</a-layout-footer>
+    <a-layout-footer class="footer">Hyself ©2026 由 HY 创建</a-layout-footer>
 </template>
 
 <script setup lang="ts"></script>

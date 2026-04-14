@@ -36,6 +36,35 @@ describe('chat lifecycle helpers', () => {
         expect(initialized.value).toBe(true)
     })
 
+    it('does not require global group join requests to be loaded by unauthorized callers', async () => {
+        const clearSendingState = vi.fn()
+        const ensureWsSubscription = vi.fn()
+        const loadConversations = vi.fn(async () => undefined)
+        const loadFriends = vi.fn(async () => undefined)
+        const loadFriendRequests = vi.fn(async () => undefined)
+        const loadGlobalGroupJoinRequests = vi.fn(async () => undefined)
+        const loadContactGroupConversations = vi.fn(async () => undefined)
+        const loadMessages = vi.fn(async () => undefined)
+        const activeConversationId = ref<number | null>(null)
+        const initialized = ref(false)
+
+        await initializeChatLifecycle({
+            clearSendingState,
+            ensureWsSubscription,
+            loadConversations,
+            loadFriends,
+            loadFriendRequests,
+            loadGlobalGroupJoinRequests,
+            loadContactGroupConversations,
+            loadMessages,
+            activeConversationId,
+            initialized,
+            sortMode: 'recent',
+        })
+
+        expect(loadGlobalGroupJoinRequests).toHaveBeenCalledOnce()
+    })
+
     it('resets chat lifecycle state and clears timers', () => {
         const conversations = ref([{ id: 1 }])
         const friends = ref([{ id: 2 }])
@@ -43,6 +72,7 @@ describe('chat lifecycle helpers', () => {
         const sentRequests = ref([{ id: 4 }])
         const seenPendingRequestIds = ref([5])
         const seenFriendNoticeIds = ref([6])
+        const seenGroupNoticeIds = ref(['notice-7'])
         const friendNoticeItems = ref([{ id: 'notice-1' }])
         const groupNoticeItems = ref([{ id: 7 }])
         const globalGroupJoinRequests = ref([{ id: 8 }])
@@ -68,6 +98,7 @@ describe('chat lifecycle helpers', () => {
             sentRequests,
             seenPendingRequestIds,
             seenFriendNoticeIds,
+            seenGroupNoticeIds,
             friendNoticeItems,
             groupNoticeItems,
             globalGroupJoinRequests,
@@ -91,6 +122,7 @@ describe('chat lifecycle helpers', () => {
         expect(sentRequests.value).toEqual([])
         expect(seenPendingRequestIds.value).toEqual([])
         expect(seenFriendNoticeIds.value).toEqual([])
+        expect(seenGroupNoticeIds.value).toEqual([])
         expect(friendNoticeItems.value).toEqual([])
         expect(groupNoticeItems.value).toEqual([])
         expect(globalGroupJoinRequests.value).toEqual([])
