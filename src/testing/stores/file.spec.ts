@@ -214,4 +214,75 @@ describe('useFileStore', () => {
         )
         expect(fileStore.breadcrumbs[0]?.virtual_path).toBe('__video_artifacts__')
     })
+
+    it('upserts and removes local entries with directory-first ordering', () => {
+        const fileStore = useFileStore()
+
+        fileStore.entries = [
+            {
+                id: 2,
+                display_name: 'z-file.txt',
+                stored_name: 'z-file.txt',
+                is_dir: false,
+                parent_id: null,
+                file_size: 1,
+                file_md5: '',
+                relative_path: 'z-file.txt',
+                url: '',
+                created_at: '',
+                updated_at: '',
+                is_system: false,
+                is_recycle_bin: false,
+                recycled_at: null,
+                expires_at: null,
+                remaining_days: null,
+                recycle_original_parent_id: null,
+            },
+        ]
+
+        fileStore.upsertEntryLocally({
+            id: 1,
+            display_name: 'a-folder',
+            stored_name: 'a-folder',
+            is_dir: true,
+            parent_id: null,
+            file_size: 0,
+            file_md5: '',
+            relative_path: 'a-folder',
+            url: '',
+            created_at: '',
+            updated_at: '',
+            is_system: false,
+            is_recycle_bin: false,
+            recycled_at: null,
+            expires_at: null,
+            remaining_days: null,
+            recycle_original_parent_id: null,
+        })
+        fileStore.upsertEntryLocally({
+            id: 3,
+            display_name: 'a-file.txt',
+            stored_name: 'a-file.txt',
+            is_dir: false,
+            parent_id: null,
+            file_size: 1,
+            file_md5: '',
+            relative_path: 'a-file.txt',
+            url: '',
+            created_at: '',
+            updated_at: '',
+            is_system: false,
+            is_recycle_bin: false,
+            recycled_at: null,
+            expires_at: null,
+            remaining_days: null,
+            recycle_original_parent_id: null,
+        })
+
+        expect(fileStore.entries.map((item) => item.id)).toEqual([1, 3, 2])
+
+        fileStore.removeEntryLocally(3)
+
+        expect(fileStore.entries.map((item) => item.id)).toEqual([1, 2])
+    })
 })

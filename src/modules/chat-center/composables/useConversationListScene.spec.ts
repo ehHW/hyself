@@ -69,7 +69,13 @@ vi.mock('@/views/Chat/useChatShell', () => ({
                     contactGroupConversations: [],
                 },
                 friendshipState: {
-                    friends: [],
+                    friends: [
+                        {
+                            friend_user: { id: 9, username: 'friend', display_name: '现有好友', avatar: '' },
+                            direct_conversation: { id: 18, show_in_list: true },
+                            remark: '',
+                        },
+                    ],
                 },
             },
             conversation: {
@@ -171,6 +177,63 @@ describe('useConversationListScene', () => {
         expect(loadConversations).toHaveBeenCalledOnce()
         expect(loadContactGroupConversations).toHaveBeenCalledOnce()
         expect(selectConversation).not.toHaveBeenCalled()
+
+        wrapper.unmount()
+    })
+
+    it('hides add-friend action for existing friends but keeps it for strangers', async () => {
+        const { wrapper, scene } = await mountScene()
+
+        expect(
+            scene.shouldShowAddFriendAction({
+                id: 9,
+                username: 'friend',
+                display_name: '现有好友',
+                avatar: '',
+                can_open_direct: true,
+                direct_conversation: { id: 18, show_in_list: true },
+            }),
+        ).toBe(false)
+
+        expect(
+            scene.shouldShowAddFriendAction({
+                id: 19,
+                username: 'new-user',
+                display_name: '陌生人',
+                avatar: '',
+                can_open_direct: true,
+                direct_conversation: null,
+            }),
+        ).toBe(true)
+
+        wrapper.unmount()
+    })
+
+    it('preserves synthesized stealth direct titles with nicknames', async () => {
+        const { wrapper, scene } = await mountScene()
+
+        expect(scene.conversationDisplayName({
+            id: 31,
+            type: 'direct',
+            name: 'user_a(阿甲)和user_b(阿乙)的私聊会话',
+            avatar: '',
+            direct_target: null,
+            friend_remark: null,
+            is_pinned: false,
+            access_mode: 'stealth_readonly',
+            member_role: null,
+            show_in_list: true,
+            unread_count: 0,
+            last_message_preview: '',
+            last_message_at: null,
+            member_count: 2,
+            can_send_message: false,
+            status: 'active',
+            last_read_sequence: 0,
+            member_settings: { mute_notifications: false, group_nickname: '' },
+            group_config: null,
+            owner: null,
+        })).toBe('user_a(阿甲)和user_b(阿乙)的私聊会话')
 
         wrapper.unmount()
     })

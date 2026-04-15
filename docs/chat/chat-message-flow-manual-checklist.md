@@ -9,7 +9,7 @@
 ```powershell
 hyself_server/.venv/Scripts/python.exe -m uvicorn --app-dir ./hyself_server hyself_server.asgi:application --host 127.0.0.1 --port 8000 --reload --lifespan off
 hyself_server/.venv/Scripts/python.exe -m celery --workdir ./hyself_server -A hyself_server.celery:app worker -l info --pool=solo -c 1
-pnpm --dir ./hyself dev --host 127.0.0.1 --port 5174
+pnpm dev
 ```
 
 准备数据建议：

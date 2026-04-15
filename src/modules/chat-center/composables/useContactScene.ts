@@ -2,6 +2,7 @@ import { message } from 'ant-design-vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useChatCapabilityScene } from '@/modules/chat-center/composables/useChatCapabilityScene'
+import type { ChatSearchUserItem } from '@/types/chat'
 import { getErrorMessage } from '@/utils/error'
 import { useChatShell } from '@/views/Chat/useChatShell'
 
@@ -34,6 +35,7 @@ export function useContactScene() {
     const pendingFriendRequestCount = computed(() => chatFriendshipState.unreadPendingFriendRequestCount)
     const groupNoticeCount = computed(() => chatGroupState.globalGroupJoinRequests.length + chatGroupState.unreadGroupNoticeCount)
     const friendNoticeShortcutCount = computed(() => pendingFriendRequestCount.value + chatFriendshipState.unreadFriendNoticeCount)
+    const friendUserIds = computed(() => new Set(chatFriendshipState.friends.map((item) => item.friend_user.id)))
 
     const filteredFriends = computed(() => {
         const keyword = contactKeyword.value.trim().toLowerCase()
@@ -107,6 +109,8 @@ export function useContactScene() {
         }
     }
 
+    const shouldShowAddFriendAction = (user: ChatSearchUserItem) => canAddFriend.value && !friendUserIds.value.has(user.id)
+
     watch(
         () => discoverKeyword.value,
         (keyword) => {
@@ -154,6 +158,7 @@ export function useContactScene() {
         handleSendFriendRequest,
         route,
         router,
+        shouldShowAddFriendAction,
         tallModalBodyStyle,
     }
 }

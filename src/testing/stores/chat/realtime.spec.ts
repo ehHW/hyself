@@ -1,6 +1,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import { createChatRealtimeHandler, handleTypingRealtimePayload } from '@/stores/chat/realtime'
+import { dispatchChatRealtimeEvent, resolveRealtimeErrorFeedback } from '@/stores/chat/realtimeHandlers'
 
 vi.mock('ant-design-vue', () => ({
     message: {
@@ -156,6 +157,21 @@ describe('chat realtime handler', () => {
         expect(options.setConversationUnread).toHaveBeenCalledWith(21, 4, 9)
     })
 
+    it('routes unknown events through dispatcher without side effects', async () => {
+        await dispatchChatRealtimeEvent('chat.unknown.event', { type: 'event' }, options)
+
+        expect(options.upsertConversation).not.toHaveBeenCalled()
+        expect(options.upsertMessage).not.toHaveBeenCalled()
+        expect(options.loadFriends).not.toHaveBeenCalled()
+    })
+
+    it('keeps default fallback copy for unknown realtime errors', () => {
+        expect(resolveRealtimeErrorFeedback({ type: 'error' })).toEqual({
+            toastMessage: '聊天操作失败',
+            failedStateError: '发送失败',
+        })
+    })
+
     it('refreshes friend request and friendship related lists', async () => {
         const handler = createChatRealtimeHandler(options)
 
@@ -166,6 +182,32 @@ describe('chat realtime handler', () => {
         expect(options.loadFriendRequests).toHaveBeenCalledOnce()
         expect(options.loadFriends).toHaveBeenCalledOnce()
         expect(options.loadConversations).toHaveBeenCalledOnce()
+    })
+
+    it('turns handled friend request updates into websocket notice items', async () => {
+        const handler = createChatRealtimeHandler(options)
+
+        await handler({
+            type: 'event',
+            event_type: 'chat.friend_request.updated',
+            payload: {
+                request: {
+                    id: 91,
+                    status: 'accepted',
+                    request_message: 'hi',
+                    created_at: '2026-01-01T00:00:00Z',
+                    handled_at: '2026-01-01T00:01:00Z',
+                    from_user: { id: 18, username: 'alice', display_name: '爱丽丝' },
+                    to_user: { id: 7, username: 'me', display_name: '自己' },
+                },
+            },
+        } as never)
+
+        expect(options.appendFriendNotice).toHaveBeenCalledWith(expect.objectContaining({
+            id: 'friend-request-received-91-accepted',
+            title: '爱丽丝 的好友申请已通过',
+        }))
+        expect(options.loadFriendRequests).toHaveBeenCalledOnce()
     })
 
     it('prefers friendship event conversation payload over full conversation reload', async () => {

@@ -13,7 +13,7 @@
 ```powershell
 hyself_server/.venv/Scripts/python.exe -m uvicorn --app-dir ./hyself_server hyself_server.asgi:application --host 127.0.0.1 --port 8000 --reload --lifespan off
 hyself_server/.venv/Scripts/python.exe -m celery --workdir ./hyself_server -A hyself_server.celery:app worker -l info --pool=solo -c 1
-pnpm --dir ./hyself dev --host 127.0.0.1 --port 5174
+pnpm dev
 ```
 
 ## 自动化检查
@@ -21,8 +21,8 @@ pnpm --dir ./hyself dev --host 127.0.0.1 --port 5174
 ### 前端基线
 
 ```powershell
-pnpm --dir ./hyself type-check
-pnpm --dir ./hyself test
+pnpm type-check
+pnpm test
 ```
 
 通过标准：
@@ -50,9 +50,9 @@ hyself_server/.venv/Scripts/python.exe ./hyself_server/manage.py seed_smoke_data
 ```
 
 ```powershell
-pnpm --dir ./hyself run test:browser:chat
-pnpm --dir ./hyself run test:browser:rbac
-pnpm --dir ./hyself run test:browser:ux
+pnpm run test:browser:chat
+pnpm run test:browser:rbac
+pnpm run test:browser:ux
 ```
 
 完成后执行：
@@ -92,7 +92,7 @@ CI 默认使用 Playwright 自带 Chromium。本地如果仍想强制走 Edge，
 
 ### 聊天主链路
 
-1. 按 [docs/chat-message-flow-manual-checklist.md](docs/chat-message-flow-manual-checklist.md) 执行一轮聊天手工联调。
+1. 按 [chat-message-flow-manual-checklist.md](../chat/chat-message-flow-manual-checklist.md) 执行一轮聊天手工联调。
 2. 至少覆盖文本、附件、转发、聊天记录查看器、通知与未读联动。
 
 ## 发布门槛

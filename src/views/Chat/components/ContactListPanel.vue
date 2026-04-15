@@ -208,7 +208,7 @@
                             >私聊</a-button
                         >
                         <a-button
-                            v-if="canAddFriend"
+                            v-if="shouldShowAddFriendAction(user)"
                             size="small"
                             type="primary"
                             @click="handleSendFriendRequest(user.id)"
@@ -251,6 +251,7 @@ const {
     handleSendFriendRequest,
     route,
     router,
+    shouldShowAddFriendAction,
     tallModalBodyStyle,
 } = useContactScene();
 </script>

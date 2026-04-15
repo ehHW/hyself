@@ -72,6 +72,7 @@ describe('chat lifecycle helpers', () => {
         const sentRequests = ref([{ id: 4 }])
         const seenPendingRequestIds = ref([5])
         const seenFriendNoticeIds = ref([6])
+        const seenFriendSystemNoticeIds = ref(['system-6'])
         const seenGroupNoticeIds = ref(['notice-7'])
         const friendNoticeItems = ref([{ id: 'notice-1' }])
         const groupNoticeItems = ref([{ id: 7 }])
@@ -98,6 +99,7 @@ describe('chat lifecycle helpers', () => {
             sentRequests,
             seenPendingRequestIds,
             seenFriendNoticeIds,
+            seenFriendSystemNoticeIds,
             seenGroupNoticeIds,
             friendNoticeItems,
             groupNoticeItems,
@@ -122,6 +124,7 @@ describe('chat lifecycle helpers', () => {
         expect(sentRequests.value).toEqual([])
         expect(seenPendingRequestIds.value).toEqual([])
         expect(seenFriendNoticeIds.value).toEqual([])
+        expect(seenFriendSystemNoticeIds.value).toEqual([])
         expect(seenGroupNoticeIds.value).toEqual([])
         expect(friendNoticeItems.value).toEqual([])
         expect(groupNoticeItems.value).toEqual([])

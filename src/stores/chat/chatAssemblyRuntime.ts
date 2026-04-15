@@ -277,6 +277,7 @@ export function createChatAssemblyRuntime(deps: {
             sentRequests: deps.sentRequests,
             seenPendingRequestIds: deps.seenPendingRequestIds,
             seenFriendNoticeIds: deps.seenFriendNoticeIds,
+            seenFriendSystemNoticeIds: deps.seenFriendSystemNoticeIds,
             seenGroupNoticeIds: deps.seenGroupNoticeIds,
             friendNoticeItems: deps.friendNoticeItems,
             groupNoticeItems: deps.groupNoticeItems,

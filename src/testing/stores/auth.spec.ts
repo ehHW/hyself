@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
     permissionContextApi: vi.fn(),
     profileApi: vi.fn(),
     refreshTokenApi: vi.fn(),
-    subscribe: vi.fn(),
+    subscribeToRealtimeEvent: vi.fn(),
     connect: vi.fn(),
     disconnect: vi.fn(),
     updateToken: vi.fn(),
@@ -18,7 +18,8 @@ const mocks = vi.hoisted(() => ({
     replace: vi.fn(),
     bootstrapSummaries: vi.fn(),
     resetLifecycle: vi.fn(),
-    loadChatPreferences: vi.fn(),
+    applySessionContext: vi.fn(),
+    markSessionSettingsStale: vi.fn(),
 }))
 
 vi.mock('ant-design-vue', () => ({
@@ -57,19 +58,25 @@ vi.mock('@/stores/chat', () => ({
 
 vi.mock('@/stores/settings', () => ({
     useSettingsStore: () => ({
-        loadChatPreferences: mocks.loadChatPreferences,
+        applySessionContext: mocks.applySessionContext,
+        markSessionSettingsStale: mocks.markSessionSettingsStale,
     }),
 }))
 
-let wsListener: ((payload: Record<string, unknown>) => void) | null = null
+const realtimeEventListeners = new Map<string, (payload: { raw: Record<string, unknown> }) => void>()
+
+vi.mock('@/realtime/dispatcher', () => ({
+    subscribeToRealtimeEvent: (eventType: string, listener: (payload: { raw: Record<string, unknown> }) => void) => {
+        mocks.subscribeToRealtimeEvent(eventType, listener)
+        realtimeEventListeners.set(eventType, listener)
+        return vi.fn(() => {
+            realtimeEventListeners.delete(eventType)
+        })
+    },
+}))
 
 vi.mock('@/utils/websocket', () => ({
     globalWebSocket: {
-        subscribe: (listener: (payload: Record<string, unknown>) => void) => {
-            mocks.subscribe(listener)
-            wsListener = listener
-            return vi.fn()
-        },
         connect: mocks.connect,
         disconnect: mocks.disconnect,
         updateToken: mocks.updateToken,
@@ -100,18 +107,45 @@ const flushPromises = async () => {
 describe('useAuthStore', () => {
     beforeEach(() => {
         setActivePinia(createPinia())
-        wsListener = null
+        realtimeEventListeners.clear()
         vi.clearAllMocks()
+        mocks.loginApi.mockResolvedValue({
+            data: {
+                access: 'access-token',
+                refresh: 'refresh-token',
+                user: buildUser(),
+            },
+        })
         mocks.permissionContextApi.mockResolvedValue({
             data: {
                 permission_codes: ['file.view_resource'],
                 visible_menu_keys: ['resource-center'],
+                system: {
+                    system_title: 'Hyself 管理后台',
+                },
+                chat: {
+                    theme_mode: 'light',
+                    chat_receive_notification: true,
+                    chat_list_sort_mode: 'recent',
+                    chat_stealth_inspect_enabled: false,
+                    settings_json: {},
+                },
             },
         })
         mocks.profileApi.mockResolvedValue({
             data: buildUser(),
         })
-        mocks.loadChatPreferences.mockResolvedValue(null)
+    })
+
+    it('hydrates session bootstrap during login before chat route initialization', async () => {
+        const authStore = useAuthStore()
+
+        await authStore.login('alice', 'secret')
+
+        expect(mocks.loginApi).toHaveBeenCalledWith({ username: 'alice', password: 'secret' })
+        expect(mocks.permissionContextApi).toHaveBeenCalledTimes(1)
+        expect(mocks.applySessionContext).toHaveBeenCalledTimes(1)
+        expect(mocks.connect).toHaveBeenCalledWith('access-token', true)
     })
 
     it('refreshes profile and permission context on user.permission.updated', async () => {
@@ -121,10 +155,12 @@ describe('useAuthStore', () => {
         authStore.setTokens('access-token', 'refresh-token')
         authStore.ensureGlobalWsListener()
 
-        wsListener?.({
-            type: 'event',
-            event_type: 'user.permission.updated',
-            payload: {},
+        realtimeEventListeners.get('user.permission.updated')?.({
+            raw: {
+                type: 'event',
+                event_type: 'user.permission.updated',
+                payload: {},
+            },
         })
         await flushPromises()
 
@@ -144,11 +180,13 @@ describe('useAuthStore', () => {
         userStore.setUser(buildUser())
         authStore.ensureGlobalWsListener()
 
-        wsListener?.({
-            type: 'event',
-            event_type: 'system.force_logout',
-            payload: {
-                message: '管理员已强制下线',
+        realtimeEventListeners.get('system.force_logout')?.({
+            raw: {
+                type: 'event',
+                event_type: 'system.force_logout',
+                payload: {
+                    message: '管理员已强制下线',
+                },
             },
         })
         await flushPromises()
@@ -157,6 +195,7 @@ describe('useAuthStore', () => {
         expect(authStore.refreshToken).toBe('')
         expect(userStore.user).toBeNull()
         expect(mocks.disconnect).toHaveBeenCalledTimes(1)
+        expect(mocks.markSessionSettingsStale).toHaveBeenCalledTimes(1)
         expect(mocks.resetLifecycle).toHaveBeenCalledTimes(1)
         expect(mocks.push).toHaveBeenCalledWith('/login')
         expect(mocks.warning).toHaveBeenCalledWith('管理员已强制下线')

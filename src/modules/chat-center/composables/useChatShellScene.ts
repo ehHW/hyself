@@ -60,7 +60,7 @@ export function useChatShellScene(options?: { bootstrap?: boolean }) {
 
     const initializeChat = async () => {
         try {
-            await settingsStore.loadChatPreferences()
+            await settingsStore.loadSessionSettings({ includeChatPreferences: true })
         } catch {
             // ignore and use local persisted settings
         }
@@ -76,7 +76,7 @@ export function useChatShellScene(options?: { bootstrap?: boolean }) {
 
     const refreshCurrentChatScene = async () => {
         try {
-            await settingsStore.loadChatPreferences()
+            await settingsStore.loadSessionSettings({ includeChatPreferences: true })
         } catch {
             // ignore and use local persisted settings
         }

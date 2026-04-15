@@ -189,6 +189,15 @@
             }"
             @ok="confirmUploadToCurrentFolder"
         >
+            <a-alert
+                v-if="props.externalTargetFolder"
+                type="info"
+                show-icon
+                class="target-modal-alert"
+                :message="`当前统一目录：${props.externalTargetFolder.displayName}`"
+                :description="`本批上传会直接写入该目录；如需改回当前浏览目录，可点击“改回当前目录”。`"
+            />
+
             <div class="target-modal-toolbar">
                 <a-breadcrumb class="target-modal-toolbar__breadcrumb">
                     <a-breadcrumb-item
@@ -198,14 +207,27 @@
                         <a @click="openBreadcrumb(item.id)">{{ item.name }}</a>
                     </a-breadcrumb-item>
                 </a-breadcrumb>
-                <a-button
-                    v-if="canCreateFolder && !isReadonly"
-                    type="primary"
-                    ghost
-                    size="small"
-                    @click="toggleCreateFolderInline"
-                    >新建文件夹</a-button
-                >
+                <a-space>
+                    <a-button
+                        size="small"
+                        @click="emit('request-upload-target-picker')"
+                        >统一目录选择器</a-button
+                    >
+                    <a-button
+                        v-if="props.externalTargetFolder"
+                        size="small"
+                        @click="emit('clear-upload-target-picker')"
+                        >改回当前目录</a-button
+                    >
+                    <a-button
+                        v-if="canCreateFolder && !isReadonly"
+                        type="primary"
+                        ghost
+                        size="small"
+                        @click="toggleCreateFolderInline"
+                        >新建文件夹</a-button
+                    >
+                </a-space>
             </div>
 
             <div
@@ -258,7 +280,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { message } from "ant-design-vue";
 import FileNameCell from "@/components/common/FileNameCell.vue";
 import { useFileStore } from "@/stores/file";
@@ -266,6 +288,21 @@ import { useUserStore } from "@/stores/user";
 import type { FileEntryItem } from "@/api/upload";
 import { getErrorMessage } from "@/utils/error";
 import { formatFileSize } from "@/utils/fileFormatter";
+
+type UploadTargetFolderSelection = {
+    entryId: number;
+    displayName: string;
+    relativePath: string;
+};
+
+const props = defineProps<{
+    externalTargetFolder?: UploadTargetFolderSelection | null;
+}>();
+
+const emit = defineEmits<{
+    "request-upload-target-picker": [];
+    "clear-upload-target-picker": [];
+}>();
 
 const fileStore = useFileStore();
 const userStore = useUserStore();
@@ -574,7 +611,7 @@ const confirmUploadToCurrentFolder = async () => {
     try {
         await fileStore.addUploadFiles(
             waitingFiles.value,
-            fileStore.currentParentId,
+            props.externalTargetFolder?.entryId ?? fileStore.currentParentId,
         );
         waitingFiles.value = [];
         selectTargetOpen.value = false;
@@ -718,9 +755,23 @@ onMounted(async () => {
         message.error(getErrorMessage(error, "文件上传初始化失败"));
     }
 });
+
+watch(
+    () => props.externalTargetFolder?.entryId,
+    (entryId) => {
+        if (!selectTargetOpen.value) {
+            return;
+        }
+        void fileStore.loadEntries(entryId ?? null);
+    },
+);
 </script>
 
 <style scoped>
+.target-modal-alert {
+    margin-bottom: 12px;
+}
+
 .upload-task-panel {
     min-height: 0;
     position: relative;

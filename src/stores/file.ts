@@ -5,6 +5,21 @@ import type { FileEntryItem, FileManageScope } from '@/api/upload'
 import { uploadFileWithCategory } from '@/utils/fileUploader'
 import { useAuthStore } from '@/stores/auth'
 
+const sortFileEntries = (items: FileEntryItem[]) => {
+    return [...items].sort((left, right) => {
+        if (left.is_dir !== right.is_dir) {
+            return left.is_dir ? -1 : 1
+        }
+        const leftName = String(left.display_name || '')
+        const rightName = String(right.display_name || '')
+        const nameCompare = leftName.localeCompare(rightName, 'zh-CN')
+        if (nameCompare !== 0) {
+            return nameCompare
+        }
+        return left.id - right.id
+    })
+}
+
 export type UploadTaskStatus = 'pending' | 'uploading' | 'paused' | 'completed' | 'failed' | 'canceled'
 
 export interface UploadTaskItem {
@@ -186,6 +201,16 @@ export const useFileStore = defineStore('file', () => {
         currentOwnerUserId.value = null
         currentVirtualPath.value = null
         breadcrumbs.value = [{ id: null, name: scope === 'system' ? '系统文件' : '我的文件' }]
+    }
+
+    const upsertEntryLocally = (entry: FileEntryItem) => {
+        const nextEntries = entries.value.filter((item) => item.id !== entry.id)
+        nextEntries.push(entry)
+        entries.value = sortFileEntries(nextEntries)
+    }
+
+    const removeEntryLocally = (entryId: number) => {
+        entries.value = entries.value.filter((item) => item.id !== entryId)
     }
 
     const loadEntries = async (parentId?: number | null, ownerUserId?: number | null, virtualPath?: string | null) => {
@@ -539,6 +564,8 @@ export const useFileStore = defineStore('file', () => {
         canCancelAll,
         autoResumePausedOnReload,
         setScope,
+        upsertEntryLocally,
+        removeEntryLocally,
         loadEntries,
         enterFolder,
         goToBreadcrumb,

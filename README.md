@@ -29,16 +29,16 @@ pnpm install
 
 ## 启动开发环境
 
-在项目目录内启动：
+在工作区根目录直接启动：
+
+```bash
+pnpm dev
+```
+
+如果你需要显式指定地址和端口，可以这样启动：
 
 ```bash
 pnpm dev --host 127.0.0.1 --port 5174
-```
-
-如果你从工作区根目录启动：
-
-```bash
-pnpm --dir ./hyself dev --host 127.0.0.1 --port 5174
 ```
 
 默认代理目标：
@@ -56,7 +56,7 @@ pnpm --dir ./hyself dev --host 127.0.0.1 --port 5174
 
 ```powershell
 $env:HYSELF_API_PROXY_TARGET='http://127.0.0.1:8001'
-pnpm dev --host 127.0.0.1 --port 5174
+pnpm dev
 ```
 
 ## 常用命令
@@ -139,8 +139,8 @@ src/
 
 ## 相关文档
 
-- docs/v2-release-acceptance-checklist.md
-- docs/chat-message-flow-manual-checklist.md
+- docs/V2/v2-release-acceptance-checklist.md
+- docs/chat/chat-message-flow-manual-checklist.md
 
 ## 备注
 

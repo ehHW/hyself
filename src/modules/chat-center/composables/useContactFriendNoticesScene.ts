@@ -1,13 +1,14 @@
 import { message } from 'ant-design-vue'
 import { computed, onMounted, watch } from 'vue'
 import type { ChatRequestStatus } from '@/types/chat'
+import type { ChatFriendRequestItem } from '@/types/chat'
 import { getErrorMessage } from '@/utils/error'
 import { useChatShell } from '@/views/Chat/useChatShell'
 
 type FriendNoticeItem = {
     id: string
     sourceId: number | string
-    sourceType: 'request' | 'system'
+    sourceType: 'system'
     kind: 'received' | 'sent' | 'system'
     title: string
     description: string
@@ -35,39 +36,24 @@ export function useContactFriendNoticesScene() {
     }
 
     const friendNoticeItems = computed<FriendNoticeItem[]>(() => {
-        const received = chatFriendshipState.receivedRequests
-            .filter((item) => item.status !== 'pending')
-            .map((item) => ({
-                id: `request-received-${item.id}`,
-                sourceId: item.id,
-                sourceType: 'request' as const,
-                kind: 'received' as const,
-                title: `${item.from_user.display_name || item.from_user.username} 的好友申请${item.status === 'accepted' ? '已通过' : item.status === 'rejected' ? '已拒绝' : '已处理'}`,
-                description: item.request_message || '无附言',
-                created_at: item.handled_at || item.created_at,
-            }))
-        const sent = chatFriendshipState.sentRequests
-            .filter((item) => item.status !== 'pending')
-            .map((item) => ({
-                id: `request-sent-${item.id}`,
-                sourceId: item.id,
-                sourceType: 'request' as const,
-                kind: 'sent' as const,
-                title: `你发给 ${item.to_user.display_name || item.to_user.username} 的好友申请${item.status === 'accepted' ? '已通过' : item.status === 'rejected' ? '已拒绝' : item.status === 'canceled' ? '已撤销' : '已处理'}`,
-                description: item.request_message || '无附言',
-                created_at: item.handled_at || item.created_at,
-            }))
         const system = chatFriendshipState.friendNoticeItems.map((item) => ({
             id: item.id,
             sourceId: item.id,
             sourceType: 'system' as const,
-            kind: 'system' as const,
+            kind: (String(item.payload.request_direction || item.payload.notice_type || '').includes('received') ? 'received' : String(item.payload.request_direction || '').includes('sent') ? 'sent' : 'system') as 'received' | 'sent' | 'system',
             title: item.title,
             description: item.description,
             created_at: item.created_at,
         }))
-        return [...received, ...sent, ...system].sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
+        return system.sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
     })
+
+    const sortRequestsByTime = (items: ChatFriendRequestItem[]) => {
+        return [...items].sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
+    }
+
+    const receivedHistory = computed(() => sortRequestsByTime(chatFriendshipState.receivedRequests))
+    const sentHistory = computed(() => sortRequestsByTime(chatFriendshipState.sentRequests))
 
     const loadData = async () => {
         try {
@@ -89,7 +75,6 @@ export function useContactFriendNoticesScene() {
     watch(
         friendNoticeItems,
         (items) => {
-            chatFriendship.markFriendNoticesSeen(items.filter((item) => item.sourceType === 'request').map((item) => item.sourceId as number))
             chatFriendship.markFriendSystemNoticesSeen(items.filter((item) => item.sourceType === 'system').map((item) => item.sourceId as string))
         },
         { immediate: true },
@@ -111,6 +96,8 @@ export function useContactFriendNoticesScene() {
         chatFriendshipState,
         formatDateTime,
         friendNoticeItems,
+        receivedHistory,
+        sentHistory,
         handleRequestAction,
         statusColorMap,
         statusLabelMap,

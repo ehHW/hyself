@@ -160,9 +160,15 @@
                                 </div>
                                 <div
                                     v-if="shouldShowRevokedTag(messageItem)"
-                                    class="message-bubble__revoked-tag"
+                                    class="message-bubble__state-tag"
                                 >
                                     已撤回
+                                </div>
+                                <div
+                                    v-if="shouldShowDeletedTag(messageItem)"
+                                    class="message-bubble__state-tag"
+                                >
+                                    已删除
                                 </div>
                                 <div
                                     class="message-bubble-row"
@@ -1730,6 +1736,7 @@ import {
 import { useUserStore } from "@/stores/user";
 import type {
     ChatConversationMemberItem,
+    ChatMessageDeletedPayload,
     ChatMessageForwardedPayload,
     ChatMessageItem,
     ChatMessageRecordPayload,
@@ -1974,9 +1981,19 @@ const getChatRecordPayload = (
     return payload.chat_record;
 };
 
-const showGroupSenderLine = (messageItem: ChatMessageItem) =>
-    chatConversationState.activeConversation?.type === "group" &&
-    !messageItem.is_system;
+const showGroupSenderLine = (messageItem: ChatMessageItem) => {
+    const activeConversation = chatConversationState.activeConversation;
+    if (!activeConversation || messageItem.is_system) {
+        return false;
+    }
+    if (activeConversation.type === "group") {
+        return true;
+    }
+    return (
+        activeConversation.type === "direct" &&
+        activeConversation.access_mode === "stealth_readonly"
+    );
+};
 
 const directSourceHintText = computed(() => {
     const activeConversation = chatConversationState.activeConversation;
@@ -2069,14 +2086,37 @@ const getRevokedPayload = (messageItem: ChatMessageItem) => {
     };
 };
 
+const getDeletedPayload = (messageItem: ChatMessageItem) => {
+    const payload = messageItem.payload as {
+        deleted?: Record<string, unknown>;
+    };
+    const deleted = payload.deleted;
+    if (
+        !deleted ||
+        typeof deleted !== "object" ||
+        typeof deleted.deleted_at !== "string"
+    ) {
+        return null;
+    }
+    return {
+        deleted_at: deleted.deleted_at,
+    } satisfies ChatMessageDeletedPayload;
+};
+
 const isRevokedMessage = (messageItem: ChatMessageItem) =>
     Boolean(getRevokedPayload(messageItem));
+
+const isDeletedMessage = (messageItem: ChatMessageItem) =>
+    Boolean(getDeletedPayload(messageItem));
 
 const shouldRenderRevokedPlaceholder = (messageItem: ChatMessageItem) =>
     isRevokedMessage(messageItem) && !isStealthAuditEnabled.value;
 
 const shouldShowRevokedTag = (messageItem: ChatMessageItem) =>
     isRevokedMessage(messageItem) && isStealthAuditEnabled.value;
+
+const shouldShowDeletedTag = (messageItem: ChatMessageItem) =>
+    isDeletedMessage(messageItem) && isStealthAuditEnabled.value;
 
 const canRestoreRevokedMessage = (messageItem: ChatMessageItem) => {
     const revoked = getRevokedPayload(messageItem);
@@ -2341,6 +2381,27 @@ const scrollToSequence = async (sequence: number) => {
     return true;
 };
 
+const syncedMessageConversationIds = new Set<number>();
+const syncedMemberConversationIds = new Set<number>();
+const activeConversationSyncTasks = new Map<number, Promise<void>>();
+
+const runConversationSync = async (
+    conversationId: number,
+    taskFactory: () => Promise<void>,
+) => {
+    const existingTask = activeConversationSyncTasks.get(conversationId);
+    if (existingTask) {
+        return existingTask;
+    }
+    const task = taskFactory().finally(() => {
+        if (activeConversationSyncTasks.get(conversationId) === task) {
+            activeConversationSyncTasks.delete(conversationId);
+        }
+    });
+    activeConversationSyncTasks.set(conversationId, task);
+    return task;
+};
+
 const syncActiveConversation = async () => {
     const conversationId = chatConversationState.activeConversationId;
     if (!conversationId) {
@@ -2348,29 +2409,43 @@ const syncActiveConversation = async () => {
         return;
     }
     try {
-        if (
-            chatConversationState.activeConversation?.type === "group" &&
-            chatConversationState.activeConversation.access_mode === "member"
-        ) {
-            await chatGroup.loadMembers(conversationId);
-        }
-        if (!chatMessageState.activeMessages.length) {
-            await chatMessage.loadMessages(conversationId);
-        }
-        const lastSequence =
-            chatMessageState.activeMessages.at(-1)?.sequence || 0;
-        if (
-            route.name === "ChatMessages" &&
-            chatConversationState.activeConversation?.access_mode ===
-                "member" &&
-            chatConversationState.activeConversation?.unread_count &&
-            lastSequence > 0
-        ) {
-            await chatMessage.markConversationRead(
-                conversationId,
-                lastSequence,
-            );
-        }
+        await runConversationSync(conversationId, async () => {
+            const activeConversation = chatConversationState.activeConversation;
+            const isGroupMemberConversation =
+                activeConversation?.type === "group" &&
+                activeConversation.access_mode === "member";
+            const needsMessageBootstrap =
+                !syncedMessageConversationIds.has(conversationId);
+
+            if (needsMessageBootstrap) {
+                await chatMessage.loadMessages(conversationId);
+                syncedMessageConversationIds.add(conversationId);
+                if (isGroupMemberConversation) {
+                    syncedMemberConversationIds.add(conversationId);
+                }
+            } else if (
+                isGroupMemberConversation &&
+                !syncedMemberConversationIds.has(conversationId)
+            ) {
+                await chatGroup.loadMembers(conversationId);
+                syncedMemberConversationIds.add(conversationId);
+            }
+
+            const lastSequence =
+                chatMessageState.activeMessages.at(-1)?.sequence || 0;
+            if (
+                route.name === "ChatMessages" &&
+                chatConversationState.activeConversation?.access_mode ===
+                    "member" &&
+                chatConversationState.activeConversation?.unread_count &&
+                lastSequence > 0
+            ) {
+                await chatMessage.markConversationRead(
+                    conversationId,
+                    lastSequence,
+                );
+            }
+        });
     } catch (error: unknown) {
         message.error(getErrorMessage(error, "加载会话失败"));
     }
@@ -2884,7 +2959,7 @@ onBeforeUnmount(() => {
     font-weight: 600;
 }
 
-.message-bubble__revoked-tag {
+.message-bubble__state-tag {
     display: inline-flex;
     align-items: center;
     width: fit-content;

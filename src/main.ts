@@ -47,7 +47,7 @@ const bootstrapAuth = async () => {
     }
 
     try {
-        await authStore.fetchProfile()
+        await authStore.refreshSessionContext()
     } catch {
         authStore.clearAuth()
     }

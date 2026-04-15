@@ -1,22 +1,20 @@
 import { ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createChatRealtimeRuntime } from '@/stores/chat/chatRealtimeRuntime'
-import { globalWebSocket } from '@/utils/websocket'
+import { subscribeToRealtimeDomain } from '@/realtime/dispatcher'
 
-vi.mock('@/utils/websocket', () => ({
-    globalWebSocket: {
-        subscribe: vi.fn(),
-    },
+vi.mock('@/realtime/dispatcher', () => ({
+    subscribeToRealtimeDomain: vi.fn(),
 }))
 
 describe('createChatRealtimeRuntime', () => {
     beforeEach(() => {
-        vi.mocked(globalWebSocket.subscribe).mockReset()
+        vi.mocked(subscribeToRealtimeDomain).mockReset()
     })
 
     it('subscribes only once and disposes the active subscription', () => {
         const unsubscribe = vi.fn()
-        vi.mocked(globalWebSocket.subscribe).mockReturnValue(unsubscribe)
+        vi.mocked(subscribeToRealtimeDomain).mockReturnValue(unsubscribe)
 
         const runtime = createChatRealtimeRuntime({
             activeConversationId: ref(null),
@@ -45,7 +43,8 @@ describe('createChatRealtimeRuntime', () => {
         runtime.ensureSubscription()
         runtime.ensureSubscription()
 
-        expect(globalWebSocket.subscribe).toHaveBeenCalledTimes(1)
+        expect(subscribeToRealtimeDomain).toHaveBeenCalledTimes(1)
+        expect(subscribeToRealtimeDomain).toHaveBeenCalledWith('chat', expect.any(Function))
 
         runtime.dispose()
 
@@ -53,6 +52,6 @@ describe('createChatRealtimeRuntime', () => {
 
         runtime.ensureSubscription()
 
-        expect(globalWebSocket.subscribe).toHaveBeenCalledTimes(2)
+        expect(subscribeToRealtimeDomain).toHaveBeenCalledTimes(2)
     })
 })

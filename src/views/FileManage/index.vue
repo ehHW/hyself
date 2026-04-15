@@ -14,7 +14,72 @@
             <a-tab-pane key="upload" tab="文件上传" force-render />
         </a-tabs>
 
-        <template v-if="activeTab !== 'upload'">
+        <template v-if="showResourceSelectionMode">
+            <a-space
+                style="
+                    margin-bottom: 12px;
+                    width: 100%;
+                    justify-content: space-between;
+                "
+                wrap
+            >
+                <div>
+                    <div class="file-manage-mode__title">
+                        {{ resourceSelectionHeaderTitle }}
+                    </div>
+                    <div class="file-manage-mode__desc">
+                        {{ resourceSelectionHeaderDescription }}
+                    </div>
+                </div>
+
+                <a-space>
+                    <a-button
+                        v-if="showManualSelectionResultActions"
+                        @click="clearResourceSelectionResult"
+                        :disabled="!resourceSelectionResult"
+                    >
+                        清空当前结果
+                    </a-button>
+                    <a-button @click="closeResourceSelectionMode">
+                        退出资源选择模式
+                    </a-button>
+                </a-space>
+            </a-space>
+
+            <AssetPickerWorkspace
+                v-model:search-keyword="resourceSelectionSearchKeyword"
+                :breadcrumbs="resourceSelectionBreadcrumbs"
+                :columns="resourceSelectionColumns"
+                :loading="resourceSelectionLoading"
+                :scene="resourceSelectionWorkspaceScene"
+                :search-loading="resourceSelectionSearchLoading"
+                :search-options="resourceSelectionSearchOptions"
+                :table-data="resourceSelectionTableData"
+                :can-select="resourceSelectionCanSelect"
+                :format-path="resourceSelectionFormatPath"
+                :on-enter-folder="resourceSelectionEnterFolder"
+                :on-full-search="resourceSelectionDoFullSearch"
+                :on-go-to-breadcrumb="resourceSelectionGoToBreadcrumb"
+                :on-refresh="resourceSelectionRefresh"
+                :on-reset-search="resourceSelectionResetSearch"
+                :on-search-input="resourceSelectionOnSearchInput"
+                :on-search-select="resourceSelectionOnSearchSelect"
+                :on-select-item="handleResourceSelectionPick"
+            />
+
+            <a-alert
+                v-if="
+                    showManualSelectionResultActions && resourceSelectionResult
+                "
+                type="success"
+                show-icon
+                style="margin-top: 12px"
+                :message="`当前已选：${resourceSelectionResult.displayName}`"
+                :description="`asset_reference_id: ${resourceSelectionResult.assetReferenceId}`"
+            />
+        </template>
+
+        <template v-else-if="activeTab !== 'upload'">
             <a-space
                 style="
                     margin-bottom: 12px;
@@ -58,6 +123,16 @@
                         @click="openCreateFolder"
                         >新建文件夹</a-button
                     >
+                    <a-button
+                        v-if="resourceSelectionModeAvailable"
+                        @click="openResourceSelectionMode"
+                    >
+                        {{
+                            isSystemScope
+                                ? "打开系统资源选择器"
+                                : "进入资源选择模式"
+                        }}
+                    </a-button>
                 </a-space>
             </a-space>
 
@@ -81,6 +156,17 @@
                     >重置</a-button
                 >
             </a-space>
+
+            <a-alert
+                v-if="isSystemScope && resourceSelectionResult"
+                type="success"
+                show-icon
+                closable
+                style="margin-bottom: 12px"
+                :message="`当前已选：${resourceSelectionResult.displayName}`"
+                :description="`asset_reference_id: ${resourceSelectionResult.assetReferenceId}`"
+                @close="clearResourceSelectionResult"
+            />
 
             <div ref="tableContainerRef" class="file-table-container">
                 <a-table
@@ -164,7 +250,14 @@
             </div>
         </template>
 
-        <UploadTaskPanel v-else />
+        <KeepAlive>
+            <UploadTaskPanel
+                v-if="activeTab === 'upload'"
+                :external-target-folder="uploadTargetFolder"
+                @request-upload-target-picker="openUploadTargetFolderPicker"
+                @clear-upload-target-picker="clearUploadTargetFolder"
+            />
+        </KeepAlive>
     </a-card>
 
     <a-modal
@@ -186,6 +279,14 @@
     >
         <a-input v-model:value="renameName" placeholder="请输入新的名称" />
     </a-modal>
+
+    <SystemResourcePickerDialog
+        v-model:open="systemResourcePickerOpen"
+        :parent-id="fileStore.currentParentId"
+        :owner-user-id="fileStore.currentOwnerUserId"
+        :virtual-path="fileStore.currentVirtualPath"
+        @select="handleSystemResourceDialogSelect"
+    />
 </template>
 
 <script setup lang="ts">
@@ -197,8 +298,19 @@ import type {
     SearchFileEntryItem,
 } from "@/api/upload";
 import { message } from "ant-design-vue";
+import type { AssetPickerSelection } from "@/components/assets/assetPickerAdapter";
+import AssetPickerWorkspace from "@/components/assets/AssetPickerWorkspace.vue";
+import SystemResourcePickerDialog from "@/components/assets/SystemResourcePickerDialog.vue";
+import {
+    RESOURCE_CENTER_EMBEDDED_ASSET_PICKER_SCENE,
+    UPLOAD_TARGET_FOLDER_ASSET_PICKER_SCENE,
+    resolveAssetPickerWorkspaceScene,
+    type AssetPickerWorkspaceSceneInput,
+} from "@/components/assets/assetPickerScenes";
 import FileNameCell from "@/components/common/FileNameCell.vue";
+import { useAssetPickerScene } from "@/components/assets/useAssetPickerScene";
 import UploadTaskPanel from "@/views/FileManage/components/UploadTaskPanel.vue";
+import { createFileManageRealtimeRuntime } from "@/views/FileManage/resourceRealtimeRuntime";
 import { useFileStore } from "@/stores/file";
 import { useUserStore } from "@/stores/user";
 import { subscribeAppRefresh } from "@/utils/appRefresh";
@@ -218,7 +330,30 @@ const renameOpen = ref(false);
 const renameName = ref("");
 const renameId = ref<number | null>(null);
 const selectedRecycleIds = ref<number[]>([]);
+const systemResourcePickerOpen = ref(false);
 const activeTab = ref<"user" | "system" | "upload">("user");
+type ResourceSelectionSessionKind = "resource-center" | "upload-target";
+
+type ResourceSelectionSession = {
+    title: string;
+    description: string;
+    scope: FileManageScope;
+    initialParentId?: number | null;
+    initialOwnerUserId?: number | null;
+    initialVirtualPath?: string | null;
+    workspaceScene: AssetPickerWorkspaceSceneInput;
+    kind: ResourceSelectionSessionKind;
+};
+
+type UploadTargetFolderSelection = {
+    entryId: number;
+    displayName: string;
+    relativePath: string;
+};
+
+const resourceSelectionSession = ref<ResourceSelectionSession | null>(null);
+const resourceSelectionResult = ref<AssetPickerSelection | null>(null);
+const uploadTargetFolder = ref<UploadTargetFolderSelection | null>(null);
 
 const searchKeyword = ref("");
 const suggestResults = ref<SearchFileEntryItem[]>([]);
@@ -227,6 +362,26 @@ const isSearchMode = ref(false);
 const searchLoading = ref(false);
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let unsubscribeAppRefresh: (() => void) | null = null;
+const realtimeRuntime = createFileManageRealtimeRuntime({
+    isViewActive: () => activeTab.value !== "upload",
+    isSystemScope: () => fileScope.value === "system",
+    hasActiveSearch: () => isSearchMode.value,
+    getCurrentParentId: () => fileStore.currentParentId,
+    getCurrentOwnerUserId: () => fileStore.currentOwnerUserId,
+    getCurrentVirtualPath: () => fileStore.currentVirtualPath,
+    upsertEntry: (entry) => {
+        fileStore.upsertEntryLocally(entry);
+    },
+    removeEntry: (entryId) => {
+        fileStore.removeEntryLocally(entryId);
+    },
+    refreshEntries: async () => {
+        await refresh();
+    },
+    refreshSearch: async () => {
+        await doFullSearch();
+    },
+});
 
 const fileScope = computed<FileManageScope>(() =>
     activeTab.value === "system" ? "system" : "user",
@@ -383,6 +538,92 @@ const isRecycleBinView = computed(
     () =>
         !isSearchMode.value && Boolean(fileStore.currentParent?.is_recycle_bin),
 );
+const resourceSelectionModeAvailable = computed(() => {
+    const session = resourceSelectionSession.value;
+    if (!session) {
+        return activeTab.value !== "upload" && !isRecycleBinView.value;
+    }
+    if (session.kind === "upload-target") {
+        return true;
+    }
+    return activeTab.value !== "upload" && !isRecycleBinView.value;
+});
+
+const showResourceSelectionMode = computed(
+    () =>
+        Boolean(resourceSelectionSession.value) &&
+        resourceSelectionModeAvailable.value,
+);
+
+const resourceSelectionHeaderTitle = computed(
+    () => resourceSelectionSession.value?.title || "资源选择模式",
+);
+
+const resourceSelectionHeaderDescription = computed(
+    () =>
+        resourceSelectionSession.value?.description ||
+        "在当前资源域里浏览、搜索并选中已有资源。",
+);
+
+const showManualSelectionResultActions = computed(
+    () => resourceSelectionSession.value?.kind === "resource-center",
+);
+
+const resourceSelectionWorkspaceScene = computed(() =>
+    resolveAssetPickerWorkspaceScene({
+        ...(resourceSelectionSession.value?.workspaceScene ||
+            RESOURCE_CENTER_EMBEDDED_ASSET_PICKER_SCENE),
+    }),
+);
+const resourceSelectionEnabled = computed(
+    () => showResourceSelectionMode.value,
+);
+const {
+    breadcrumbs: resourceSelectionBreadcrumbs,
+    canSelect: resourceSelectionCanSelect,
+    columns: resourceSelectionColumns,
+    doFullSearch: resourceSelectionDoFullSearch,
+    enterFolder: resourceSelectionEnterFolder,
+    formatPath: resourceSelectionFormatPath,
+    goToBreadcrumb: resourceSelectionGoToBreadcrumb,
+    loading: resourceSelectionLoading,
+    onSearchInput: resourceSelectionOnSearchInput,
+    onSearchSelect: resourceSelectionOnSearchSelect,
+    pickItem: resourceSelectionPickItem,
+    refresh: resourceSelectionRefresh,
+    resetSearch: resourceSelectionResetSearch,
+    searchKeyword: resourceSelectionSearchKeyword,
+    searchLoading: resourceSelectionSearchLoading,
+    searchOptions: resourceSelectionSearchOptions,
+    tableData: resourceSelectionTableData,
+} = useAssetPickerScene({
+    enabled: resourceSelectionEnabled,
+    scope: computed(
+        () => resourceSelectionSession.value?.scope ?? fileScope.value,
+    ),
+    parentId: computed(
+        () =>
+            resourceSelectionSession.value?.initialParentId ??
+            fileStore.currentParentId,
+    ),
+    ownerUserId: computed(
+        () =>
+            resourceSelectionSession.value?.initialOwnerUserId ??
+            fileStore.currentOwnerUserId,
+    ),
+    virtualPath: computed(
+        () =>
+            resourceSelectionSession.value?.initialVirtualPath ??
+            fileStore.currentVirtualPath,
+    ),
+    selectionMode: computed(
+        () => resourceSelectionWorkspaceScene.value.picker.selectionMode,
+    ),
+    allowedKinds: computed(
+        () => resourceSelectionWorkspaceScene.value.picker.allowedKinds,
+    ),
+    text: computed(() => resourceSelectionWorkspaceScene.value.text),
+});
 
 const rowSelection = computed(() => {
     if (!isRecycleBinView.value) {
@@ -639,6 +880,85 @@ const clearAllRecycleBin = async () => {
     }
 };
 
+const openResourceSelectionMode = () => {
+    if (activeTab.value === "system") {
+        systemResourcePickerOpen.value = true;
+        return;
+    }
+
+    resourceSelectionSession.value = {
+        kind: "resource-center",
+        title: "资源选择模式",
+        description:
+            "直接复用统一 AssetPickerWorkspace，在当前资源域里浏览、搜索并选中已有资源。",
+        scope: fileScope.value,
+        initialParentId: fileStore.currentParentId,
+        initialOwnerUserId: fileStore.currentOwnerUserId,
+        initialVirtualPath: fileStore.currentVirtualPath,
+        workspaceScene: RESOURCE_CENTER_EMBEDDED_ASSET_PICKER_SCENE,
+    };
+};
+
+const openUploadTargetFolderPicker = () => {
+    resourceSelectionSession.value = {
+        kind: "upload-target",
+        title: "上传目录选择模式",
+        description:
+            "从资源中心选择一个普通目录，当前上传批次会把文件写入这里。",
+        scope: "user",
+        initialParentId: uploadTargetFolder.value?.entryId ?? null,
+        workspaceScene: UPLOAD_TARGET_FOLDER_ASSET_PICKER_SCENE,
+    };
+};
+
+const closeResourceSelectionMode = () => {
+    const session = resourceSelectionSession.value;
+    resourceSelectionSession.value = null;
+    if (session?.kind !== "resource-center") {
+        return;
+    }
+    resourceSelectionResult.value = null;
+};
+
+const clearResourceSelectionResult = () => {
+    resourceSelectionResult.value = null;
+};
+
+const clearUploadTargetFolder = () => {
+    uploadTargetFolder.value = null;
+    message.success("已改回当前浏览目录作为上传目标");
+};
+
+const handleResourceSelectionPick = (
+    item: FileEntryItem | SearchFileEntryItem,
+) => {
+    if (resourceSelectionSession.value?.kind === "upload-target") {
+        if (!item.is_dir) {
+            return;
+        }
+        uploadTargetFolder.value = {
+            entryId: item.id,
+            displayName: item.display_name,
+            relativePath: item.relative_path,
+        };
+        resourceSelectionSession.value = null;
+        message.success(`上传目录已切换为：${item.display_name}`);
+        return;
+    }
+
+    const selection = resourceSelectionPickItem(item);
+    if (!selection) {
+        return;
+    }
+    resourceSelectionResult.value = selection;
+    message.success(`已选中资源：${selection.displayName}`);
+};
+
+const handleSystemResourceDialogSelect = (selection: AssetPickerSelection) => {
+    resourceSelectionResult.value = selection;
+    message.success(`已选中系统资源：${selection.displayName}`);
+};
+
 const submitRename = async () => {
     const nextName = trimText(renameName.value);
     if (!nextName) {
@@ -679,6 +999,7 @@ watch(
         if (tab === "upload") {
             clearSearchState();
             selectedRecycleIds.value = [];
+            resourceSelectionResult.value = null;
             return;
         }
         const scope = tab === "system" ? "system" : "user";
@@ -690,7 +1011,33 @@ watch(
     { immediate: true },
 );
 
+watch(
+    resourceSelectionModeAvailable,
+    (available) => {
+        if (available) {
+            return;
+        }
+        systemResourcePickerOpen.value = false;
+        resourceSelectionSession.value = null;
+        resourceSelectionResult.value = null;
+    },
+    { immediate: true },
+);
+
+watch(activeTab, (tab) => {
+    if (tab === "upload") {
+        return;
+    }
+    if (tab !== "system") {
+        systemResourcePickerOpen.value = false;
+    }
+    if (resourceSelectionSession.value?.kind === "upload-target") {
+        resourceSelectionSession.value = null;
+    }
+});
+
 onMounted(() => {
+    realtimeRuntime.ensureSubscription();
     unsubscribeAppRefresh = subscribeAppRefresh(async () => {
         if (activeTab.value === "upload") {
             return;
@@ -714,6 +1061,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+    realtimeRuntime.dispose();
     unsubscribeAppRefresh?.();
     unsubscribeAppRefresh = null;
     if (searchDebounceTimer) {
@@ -743,6 +1091,17 @@ onBeforeUnmount(() => {
 
 .file-upload-tabs {
     flex: 0 0 auto;
+}
+
+.file-manage-mode__title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.file-manage-mode__desc {
+    margin-top: 4px;
+    color: var(--text-secondary);
 }
 
 .file-table-container {

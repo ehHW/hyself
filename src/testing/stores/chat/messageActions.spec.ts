@@ -1,8 +1,20 @@
 import { computed, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatConversationItem, ChatFriendshipItem } from '@/types/chat'
-import { sendAssetMessageAction } from '@/stores/chat/messageActions'
+import { loadMessagesAction, sendAssetMessageAction } from '@/stores/chat/messageActions'
 import { globalWebSocket } from '@/utils/websocket'
+
+const apiMocks = vi.hoisted(() => ({
+    getConversationMessagesApi: vi.fn(),
+    getConversationDetailApi: vi.fn(),
+    readConversationApi: vi.fn(),
+}))
+
+vi.mock('@/api/chat', () => ({
+    getConversationMessagesApi: apiMocks.getConversationMessagesApi,
+    getConversationDetailApi: apiMocks.getConversationDetailApi,
+    readConversationApi: apiMocks.readConversationApi,
+}))
 
 vi.mock('@/utils/websocket', () => ({
     globalWebSocket: {
@@ -40,7 +52,68 @@ const baseConversation: ChatConversationItem = {
 describe('sendAssetMessageAction', () => {
     beforeEach(() => {
         vi.mocked(globalWebSocket.send).mockReset()
+        apiMocks.getConversationMessagesApi.mockReset()
+        apiMocks.getConversationDetailApi.mockReset()
+        apiMocks.readConversationApi.mockReset()
             ; (globalWebSocket.connected as { value: boolean }).value = true
+    })
+
+    it('deduplicates concurrent message bootstrap for the same conversation', async () => {
+        apiMocks.getConversationMessagesApi.mockResolvedValue({
+            data: {
+                items: [],
+                cursor: {
+                    before_sequence: null,
+                    after_sequence: null,
+                    has_more_before: false,
+                    has_more_after: false,
+                },
+            },
+        })
+        apiMocks.getConversationDetailApi.mockResolvedValue({
+            data: {
+                id: 18,
+                type: 'group',
+                access_mode: 'member',
+            },
+        })
+
+        const loadingMessages = ref(false)
+        const failedMessageMap = ref<Record<number, never[]>>({})
+        const upsertConversation = vi.fn()
+        const loadMembers = vi.fn(async () => undefined)
+        const messageMap: Record<number, never[]> = {}
+        const cursorMap: Record<number, {
+            before_sequence: number | null
+            after_sequence: number | null
+            has_more_before: boolean
+            has_more_after: boolean
+        }> = {}
+
+        await Promise.all([
+            loadMessagesAction({
+                conversationId: 18,
+                loadingMessages,
+                messageMap,
+                failedMessageMap,
+                cursorMap,
+                upsertConversation,
+                loadMembers,
+            }),
+            loadMessagesAction({
+                conversationId: 18,
+                loadingMessages,
+                messageMap,
+                failedMessageMap,
+                cursorMap,
+                upsertConversation,
+                loadMembers,
+            }),
+        ])
+
+        expect(apiMocks.getConversationMessagesApi).toHaveBeenCalledTimes(1)
+        expect(apiMocks.getConversationDetailApi).toHaveBeenCalledTimes(1)
+        expect(loadMembers).toHaveBeenCalledTimes(1)
     })
 
     it('rejects direct attachment send when friendship is gone', async () => {

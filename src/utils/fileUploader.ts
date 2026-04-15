@@ -1,6 +1,7 @@
 import { getUploadedChunksApi, mergeChunksApi, uploadChunkApi, uploadPrecheckApi, uploadSmallFileApi } from '@/api/upload'
 import type { FileEntryItem } from '@/api/upload'
 import { calculateFileHashes } from '@/utils/fileHash'
+import { waitForUploadTaskRealtime } from '@/utils/uploadRealtimeRuntime'
 import { globalWebSocket } from '@/utils/websocket'
 
 export const SMALL_FILE_THRESHOLD = 100 * 1024 * 1024
@@ -27,47 +28,6 @@ export interface UploadFileResult {
     url: string
     file?: FileEntryItem
     assetReferenceId?: number | null
-}
-
-const subscribeMergeProgress = (taskId: string, token: string, onProgress?: (progress: number) => void, onLog?: (message: string) => void): Promise<UploadFileResult> => {
-    return new Promise((resolve, reject) => {
-        globalWebSocket.connect(token)
-
-        const stopListen = globalWebSocket.subscribe((payload) => {
-            if (payload.type !== 'upload_progress' || String(payload.task_id || '') !== taskId) {
-                return
-            }
-
-            if (typeof payload.progress === 'number') {
-                onProgress?.(payload.progress)
-            }
-            if (payload.message) {
-                onLog?.(String(payload.message))
-            }
-            if (payload.status === 'done') {
-                globalWebSocket.unsubscribeUploadTask(taskId)
-                stopListen()
-                resolve({
-                    mode: 'chunked',
-                    relativePath: String(payload.relative_path || ''),
-                    url: String(payload.url || ''),
-                    file: payload.file as FileEntryItem | undefined,
-                    assetReferenceId: typeof payload.asset_reference_id === 'number' ? payload.asset_reference_id : null,
-                })
-            }
-            if (payload.status === 'failed') {
-                globalWebSocket.unsubscribeUploadTask(taskId)
-                stopListen()
-                reject(new Error(String(payload.message || '后台合并失败')))
-            }
-        })
-
-        const subscribed = globalWebSocket.subscribeUploadTask(taskId)
-        if (!subscribed) {
-            stopListen()
-            reject(new Error('全局 WebSocket 未连接，无法订阅上传进度'))
-        }
-    })
 }
 
 export const uploadFileWithCategory = async ({
@@ -197,5 +157,5 @@ export const uploadFileWithCategory = async ({
         relative_path: relativePath,
     })
 
-    return subscribeMergeProgress(mergeRes.data.task_id, token, onMergeProgress, onLog)
+    return waitForUploadTaskRealtime({ taskId: mergeRes.data.task_id, token, onProgress: onMergeProgress, onLog })
 }

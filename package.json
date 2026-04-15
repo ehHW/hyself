@@ -10,7 +10,8 @@
         "build-only": "vite build",
         "type-check": "vue-tsc --build",
         "test": "vitest run",
-        "test:browser:chat": "node scripts/browser-chat-navigation-regression.mjs",
+        "test:browser:chat": "node scripts/browser-chat-navigation-regression.mjs && node scripts/browser-chat-stealth-regression.mjs",
+        "test:browser:chat:stealth": "node scripts/browser-chat-stealth-regression.mjs",
         "test:browser:rbac": "node scripts/browser-rbac-regression.mjs",
         "test:browser:ux": "node scripts/browser-error-entertainment-regression.mjs",
         "format": "oxfmt src/"

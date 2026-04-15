@@ -7,6 +7,18 @@ import { mergeConversationMessages } from '@/stores/chat/message'
 
 type MessageParams = { before_sequence?: number; after_sequence?: number; around_sequence?: number; limit?: number }
 
+const messageLoadTaskMap = new Map<string, Promise<void>>()
+
+function buildMessageLoadKey(conversationId: number, params?: MessageParams) {
+    return [
+        conversationId,
+        params?.before_sequence ?? '',
+        params?.after_sequence ?? '',
+        params?.around_sequence ?? '',
+        params?.limit ?? '',
+    ].join(':')
+}
+
 function isSelfDirectConversation(conversation: ChatConversationItem, currentUserId?: number) {
     if (conversation.type !== 'direct' || !currentUserId) {
         return false
@@ -28,22 +40,39 @@ export async function loadMessagesAction(options: {
     loadMembers: (conversationId: number) => Promise<void>
 }) {
     const { conversationId, params, loadingMessages, messageMap, failedMessageMap, cursorMap, upsertConversation, loadMembers } = options
-    loadingMessages.value = true
-    try {
-        const { data } = await getConversationMessagesApi(conversationId, params)
-        messageMap[conversationId] = mergeConversationMessages(
-            messageMap[conversationId] || [],
-            failedMessageMap.value[conversationId] || [],
-            data.items,
-        )
-        cursorMap[conversationId] = data.cursor
-        const detail = await getConversationDetailApi(conversationId)
-        upsertConversation(detail.data)
-        if (detail.data.type === 'group' && detail.data.access_mode === 'member') {
-            await loadMembers(conversationId)
+    const taskKey = buildMessageLoadKey(conversationId, params)
+    const existingTask = messageLoadTaskMap.get(taskKey)
+    if (existingTask) {
+        return existingTask
+    }
+
+    const task = (async () => {
+        loadingMessages.value = true
+        try {
+            const { data } = await getConversationMessagesApi(conversationId, params)
+            messageMap[conversationId] = mergeConversationMessages(
+                messageMap[conversationId] || [],
+                failedMessageMap.value[conversationId] || [],
+                data.items,
+            )
+            cursorMap[conversationId] = data.cursor
+            const detail = await getConversationDetailApi(conversationId)
+            upsertConversation(detail.data)
+            if (detail.data.type === 'group' && detail.data.access_mode === 'member') {
+                await loadMembers(conversationId)
+            }
+        } finally {
+            loadingMessages.value = false
         }
+    })()
+
+    messageLoadTaskMap.set(taskKey, task)
+    try {
+        await task
     } finally {
-        loadingMessages.value = false
+        if (messageLoadTaskMap.get(taskKey) === task) {
+            messageLoadTaskMap.delete(taskKey)
+        }
     }
 }
 

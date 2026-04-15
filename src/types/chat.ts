@@ -242,6 +242,10 @@ export interface ChatMessageRevokedPayload {
     restore_used?: boolean
 }
 
+export interface ChatMessageDeletedPayload {
+    deleted_at: string
+}
+
 export interface ChatConversationMemberItem {
     user: ChatUserBrief
     role: ChatMemberRole

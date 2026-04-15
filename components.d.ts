@@ -52,6 +52,7 @@ declare module 'vue' {
     ASpace: typeof import('ant-design-vue/es')['Space']
     ASpin: typeof import('ant-design-vue/es')['Spin']
     AssetPickerDialog: typeof import('./src/components/assets/AssetPickerDialog.vue')['default']
+    AssetPickerWorkspace: typeof import('./src/components/assets/AssetPickerWorkspace.vue')['default']
     ASubMenu: typeof import('ant-design-vue/es')['SubMenu']
     ASwitch: typeof import('ant-design-vue/es')['Switch']
     ATable: typeof import('ant-design-vue/es')['Table']
@@ -67,5 +68,6 @@ declare module 'vue' {
     RouteOutlet: typeof import('./src/components/common/RouteOutlet.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SystemResourcePickerDialog: typeof import('./src/components/assets/SystemResourcePickerDialog.vue')['default']
   }
 }

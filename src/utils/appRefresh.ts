@@ -1,5 +1,5 @@
 export interface AppRefreshContext {
-    source: "header"
+    source: 'header' | 'chat-inspect-settings'
     routePath: string
 }
 

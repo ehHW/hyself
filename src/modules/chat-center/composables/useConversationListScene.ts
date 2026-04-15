@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { applyGroupInvitationApi, searchChatApi } from '@/api/chat'
 import { useChatCapabilityScene } from '@/modules/chat-center/composables/useChatCapabilityScene'
-import type { ChatConversationItem, ChatSearchConversationItem, ChatSearchResult } from '@/types/chat'
+import type { ChatConversationItem, ChatSearchConversationItem, ChatSearchResult, ChatSearchUserItem } from '@/types/chat'
 import { getErrorMessage } from '@/utils/error'
 import { useChatShell } from '@/views/Chat/useChatShell'
 
@@ -201,6 +201,8 @@ export function useConversationListScene() {
     const getGroupSearchActionLabel = (conversation: ChatConversationItem | ChatSearchConversationItem) => (canOpenGroupConversation(conversation) ? '打开' : canJoinGroupConversation(conversation) ? '申请加入' : '打开')
 
     const getConversationSearchActionLabel = (conversation: ChatConversationItem | ChatSearchConversationItem) => (conversation.type === 'group' ? getGroupSearchActionLabel(conversation) : '打开')
+
+    const shouldShowAddFriendAction = (user: ChatSearchUserItem) => canAddFriend.value && !friendIds.value.has(user.id)
 
     const handleApplyGroupConversation = async (conversationId: number) => {
         try {
@@ -450,6 +452,7 @@ export function useConversationListScene() {
         recentMessageMatches,
         searchDropdownVisible,
         searchFocused,
+        shouldShowAddFriendAction,
         searchKeyword,
         showQuickActionTrigger,
         tallModalBodyStyle,

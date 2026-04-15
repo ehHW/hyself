@@ -3,12 +3,19 @@
         <a-card :bordered="false" class="inspect-card">
             <div class="inspect-card__header">
                 <div class="inspect-card__title">隐身巡检</div>
-                <div class="inspect-card__desc">开启后，可直接在聊天室主界面搜索全局会话，并查看已删除、已撤回消息。</div>
+                <div class="inspect-card__desc">
+                    开启后，可直接在聊天室主界面搜索全局会话，并查看已删除、已撤回消息。
+                </div>
             </div>
 
             <a-form layout="vertical">
                 <a-form-item label="隐身巡检模式">
-                    <a-switch :checked="settingsStore.chatStealthInspectEnabled" checked-children="开启" un-checked-children="关闭" @change="handleInspectChange" />
+                    <a-switch
+                        :checked="settingsStore.chatStealthInspectEnabled"
+                        checked-children="开启"
+                        un-checked-children="关闭"
+                        @change="handleInspectChange"
+                    />
                 </a-form-item>
             </a-form>
         </a-card>
@@ -16,20 +23,29 @@
 </template>
 
 <script setup lang="ts">
-import { message } from 'ant-design-vue'
-import { getErrorMessage } from '@/utils/error'
-import { useChatShell } from '@/views/Chat/useChatShell'
+import { message } from "ant-design-vue";
+import { useRoute } from "vue-router";
+import { getErrorMessage } from "@/utils/error";
+import { emitAppRefresh } from "@/utils/appRefresh";
+import { useChatShell } from "@/views/Chat/useChatShell";
 
-const { settingsStore } = useChatShell()
+const { settingsStore } = useChatShell();
+const route = useRoute();
 
 const handleInspectChange = async (checked: boolean) => {
     try {
-        await settingsStore.saveChatPreferences({ chatStealthInspectEnabled: checked })
-        message.success(checked ? '已开启隐身巡检' : '已关闭隐身巡检')
+        await settingsStore.saveChatPreferences({
+            chatStealthInspectEnabled: checked,
+        });
+        await emitAppRefresh({
+            source: "chat-inspect-settings",
+            routePath: route.path,
+        });
+        message.success(checked ? "已开启隐身巡检" : "已关闭隐身巡检");
     } catch (error: unknown) {
-        message.error(getErrorMessage(error, '保存巡检设置失败'))
+        message.error(getErrorMessage(error, "保存巡检设置失败"));
     }
-}
+};
 </script>
 
 <style scoped>

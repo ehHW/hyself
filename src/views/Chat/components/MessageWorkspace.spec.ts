@@ -9,6 +9,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const routeState = ref({ name: "ChatMessages" });
+const stealthAuditEnabled = ref(false);
 const routerReplace = vi.fn(async () => undefined);
 const routerPush = vi.fn(async () => undefined);
 
@@ -216,7 +217,7 @@ vi.mock("@/views/Chat/useChatShell", () => ({
         chatStore,
         formatDateTime: (value: string) => value,
         isSelfMessage: (messageItem: typeof activeMessage) => messageItem.sender?.id === 1,
-        isStealthAuditEnabled: computed(() => false),
+        isStealthAuditEnabled: computed(() => stealthAuditEnabled.value),
         messageRowClass: () => "",
         settingsStore: {
             chatSendHotkey: "enter",
@@ -525,6 +526,9 @@ describe("MessageWorkspace scene boundaries", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         document.body.innerHTML = "";
+        stealthAuditEnabled.value = false;
+        activeMessage.content = "hello";
+        activeMessage.payload = {};
     });
 
     it("delegates message bubble context menu to the message-menu scene", async () => {
@@ -567,5 +571,42 @@ describe("MessageWorkspace scene boundaries", () => {
         >;
         const pastePayload = pasteCalls[0]?.[0];
         expect(pastePayload).toHaveLength(1);
+    });
+
+    it("shows deleted marker for stealth-audit messages", async () => {
+        stealthAuditEnabled.value = true;
+        activeMessage.payload = {
+            deleted: {
+                deleted_at: "2026-01-01T00:01:00Z",
+            },
+        };
+
+        const wrapper = await mountWorkspace();
+
+        expect(wrapper.text()).toContain("已删除");
+        expect(wrapper.text()).toContain("hello");
+    });
+
+    it("avoids duplicate group bootstrap requests when current history is empty", async () => {
+        chatStoreState.conversationState.activeConversationId = 24;
+        chatStoreState.conversationState.activeConversation = {
+            ...activeConversation,
+            id: 24,
+            type: "group",
+            access_mode: "member",
+            member_count: 3,
+        };
+        chatStoreState.conversationState.conversations = [
+            chatStoreState.conversationState.activeConversation,
+        ];
+        chatStoreState.messageState.activeMessages = [];
+        chatStoreState.groupState.activeMembers = [];
+
+        await mountWorkspace();
+        await Promise.resolve();
+        await nextTick();
+
+        expect(chatStore.message.loadMessages).toHaveBeenCalledTimes(1);
+        expect(chatStore.group.loadMembers).not.toHaveBeenCalled();
     });
 });

@@ -49,7 +49,7 @@ async function mountChatShell(options: {
     }
     const settingsStore = reactive({
         chatListSortMode: 'recent' as 'recent' | 'unread',
-        loadChatPreferences: vi.fn(async () => undefined),
+        loadSessionSettings: vi.fn(async () => undefined),
     })
     const userStore = {
         user: {
@@ -122,7 +122,7 @@ describe('useChatShellScene', () => {
             routeName: 'ChatCenter',
         })
 
-        expect(settingsStore.loadChatPreferences).toHaveBeenCalledOnce()
+        expect(settingsStore.loadSessionSettings).toHaveBeenCalledOnce()
         expect(chatStore.lifecycle.initialize).toHaveBeenCalledWith('recent')
         expect(replace).toHaveBeenCalledWith({ name: 'ChatMessages' })
 

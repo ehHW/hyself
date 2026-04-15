@@ -14,6 +14,7 @@ export async function loadFriendRequestsAction(options: {
     seenPendingRequestIds: Ref<number[]>
 }) {
     const { receivedRequests, sentRequests, seenFriendNoticeIds, seenPendingRequestIds } = options
+    const isInitialBootstrap = receivedRequests.value.length === 0 && sentRequests.value.length === 0 && seenFriendNoticeIds.value.length === 0
     const [received, sent] = await Promise.all([
         getFriendRequestsApi({ direction: 'received' }),
         getFriendRequestsApi({ direction: 'sent' }),
@@ -22,6 +23,14 @@ export async function loadFriendRequestsAction(options: {
     sentRequests.value = sent.data.results
     const validIds = new Set([...received.data.results, ...sent.data.results].map((item) => item.id))
     seenFriendNoticeIds.value = seenFriendNoticeIds.value.filter((id) => validIds.has(id))
+    if (isInitialBootstrap) {
+        const historicalHandledIds = [...received.data.results, ...sent.data.results]
+            .filter((item) => item.status !== 'pending')
+            .map((item) => item.id)
+        if (historicalHandledIds.length) {
+            seenFriendNoticeIds.value = [...new Set([...seenFriendNoticeIds.value, ...historicalHandledIds])]
+        }
+    }
     const validPendingReceivedIds = new Set(received.data.results.filter((item) => item.status === 'pending').map((item) => item.id))
     seenPendingRequestIds.value = seenPendingRequestIds.value.filter((id) => validPendingReceivedIds.has(id))
 }

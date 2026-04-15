@@ -1,26 +1,11 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { message } from 'ant-design-vue'
-import router from '@/router'
 import { loginApi, permissionContextApi, profileApi, refreshTokenApi } from '@/api/user'
+import { createAuthRealtimeRuntime } from '@/stores/authRealtimeRuntime'
 import { useChatStore } from '@/stores/chat'
 import { useSettingsStore } from '@/stores/settings'
 import { useUserStore } from '@/stores/user'
 import { globalWebSocket } from '@/utils/websocket'
-
-const getEnvelopeMessage = (payload: { message?: unknown; payload?: unknown }, fallback: string) => {
-    const nestedPayload = payload.payload
-    if (nestedPayload && typeof nestedPayload === 'object' && 'message' in nestedPayload) {
-        const nestedMessage = (nestedPayload as { message?: unknown }).message
-        if (nestedMessage) {
-            return String(nestedMessage)
-        }
-    }
-    if (payload.message) {
-        return String(payload.message)
-    }
-    return fallback
-}
 
 export const useAuthStore = defineStore(
     'auth',
@@ -30,6 +15,14 @@ export const useAuthStore = defineStore(
         const userStore = useUserStore()
         const settingsStore = useSettingsStore()
         let wsUnsubscribe: (() => void) | null = null
+        const authRealtimeRuntime = createAuthRealtimeRuntime({
+            refreshProfile: async () => {
+                await fetchProfile()
+            },
+            forceLogout: () => {
+                clearAuth()
+            },
+        })
 
         const isLogin = computed(() => Boolean(accessToken.value))
 
@@ -44,7 +37,9 @@ export const useAuthStore = defineStore(
                 wsUnsubscribe()
                 wsUnsubscribe = null
             }
+            authRealtimeRuntime.dispose()
             globalWebSocket.disconnect()
+            settingsStore.markSessionSettingsStale()
             accessToken.value = ''
             refreshToken.value = ''
             userStore.clearUser()
@@ -55,27 +50,11 @@ export const useAuthStore = defineStore(
             if (wsUnsubscribe) {
                 return
             }
-            wsUnsubscribe = globalWebSocket.subscribe((payload) => {
-                if (payload.type !== 'event') {
-                    return
-                }
-
-                if (payload.event_type === 'user.permission.updated') {
-                    void fetchProfile().catch(() => undefined)
-                    return
-                }
-
-                if (payload.event_type !== 'system.force_logout') {
-                    return
-                }
-
-                const forceLogoutMessage = getEnvelopeMessage(payload, '您的账号已被强制下线')
-                clearAuth()
-                if (router.currentRoute.value.path !== '/login') {
-                    router.push('/login')
-                }
-                message.warning(forceLogoutMessage)
-            })
+            authRealtimeRuntime.ensureSubscription()
+            wsUnsubscribe = () => {
+                authRealtimeRuntime.dispose()
+                wsUnsubscribe = null
+            }
         }
 
         const login = async (username: string, password: string) => {
@@ -106,6 +85,7 @@ export const useAuthStore = defineStore(
             if (!accessToken.value) return null
             const { data } = await permissionContextApi()
             userStore.setAccessContext(data)
+            settingsStore.applySessionContext(data)
             return data
         }
 
@@ -122,12 +102,7 @@ export const useAuthStore = defineStore(
 
         const refreshSessionContext = async () => {
             if (!accessToken.value) return null
-
-            const [profile] = await Promise.all([
-                fetchProfile(),
-                settingsStore.loadChatPreferences().catch(() => null),
-            ])
-            return profile
+            return fetchProfile()
         }
 
         const hasPermission = (code: string) => userStore.hasPermission(code)

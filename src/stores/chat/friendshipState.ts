@@ -12,11 +12,8 @@ export const useFriendshipChatStore = defineStore('chat-friendship-state', () =>
     const seenFriendSystemNoticeIds = ref<string[]>([])
 
     const unreadFriendNoticeCount = computed(() => {
-        const seen = new Set(seenFriendNoticeIds.value)
         const seenSystem = new Set(seenFriendSystemNoticeIds.value)
-        return receivedRequests.value.filter((item) => item.status !== 'pending' && !seen.has(item.id)).length
-            + sentRequests.value.filter((item) => item.status !== 'pending' && !seen.has(item.id)).length
-            + friendNoticeItems.value.filter((item) => !seenSystem.has(item.id)).length
+        return friendNoticeItems.value.filter((item) => !seenSystem.has(item.id)).length
     })
 
     const unreadPendingFriendRequestCount = computed(() => {
